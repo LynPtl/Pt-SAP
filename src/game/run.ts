@@ -1331,7 +1331,10 @@ function runEndTurnAbilities(state: RunState): void {
       if (hasLevelThreeFriend) {
         addPermanentStats(pet, 2 * pet.level, 2 * pet.level);
         bisonTriggered = true;
-        addLog(state, `${pet.name} 因满级友军获得属性。`);
+        addLog(
+          state,
+          `${pet.name} 因满级友军获得 +${2 * pet.level}/+${2 * pet.level}。`
+        );
       }
     }
     if (pet.name === "Monkey" && state.team[0]) {

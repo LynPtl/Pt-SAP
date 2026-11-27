@@ -1542,6 +1542,37 @@ test("Mushroom revives instead of removing a Sleeping Pill target", () => {
   assert.equal(state.team[0].perks.length, 0);
 });
 
+test("Bison scales only with another level 3 friend at end turn", () => {
+  const withoutFriend = createRun("bison-no-level-three", content);
+  const plainBison = pet("Bison", "plain-bison");
+  withoutFriend.team = [plainBison, pet("Swan", "plain-swan")];
+  endTurn(withoutFriend, content, []);
+  assert.equal(plainBison.attack, 4);
+  assert.equal(plainBison.health, 4);
+
+  const withFriend = createRun("bison-level-three-friend", content);
+  const scalingBison = pet("Bison", "scaling-bison");
+  withFriend.team = [
+    scalingBison,
+    pet("Ant", "level-three-friend", 3)
+  ];
+  endTurn(withFriend, content, []);
+  assert.equal(scalingBison.attack, 6);
+  assert.equal(scalingBison.health, 6);
+  assert.ok(
+    withFriend.log.some((line) =>
+      line.includes("Bison 因满级友军获得 +2/+2")
+    )
+  );
+
+  const selfOnly = createRun("bison-self-level-three", content);
+  const levelThreeBison = pet("Bison", "level-three-bison", 3);
+  selfOnly.team = [levelThreeBison];
+  endTurn(selfOnly, content, []);
+  assert.equal(levelThreeBison.attack, 8);
+  assert.equal(levelThreeBison.health, 8);
+});
+
 test("after-attack abilities still execute on a simultaneously fainting attacker", () => {
   const result = resolveBattle(
     {

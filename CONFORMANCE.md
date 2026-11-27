@@ -43,6 +43,7 @@
 | 刷新 1 金、冻结免费 | 已对齐 | A | `run.ts` | 冻结排序细节待验证 |
 | 出售价值等于等级 | 已对齐 | A/B | `sellValueForPet` | 特殊修正需逐项测试 |
 | 满队购买限制 | 已对齐 | A | `buyPet` | 奖励宠物与普通宠物共用该规则 |
+| Bison 结束回合成长 | 已对齐“另一只 Lv.3 友方”条件 | A | `runEndTurnAbilities` | 多 Bison 只触发一只 |
 | 2/3 XP 升级 | 已补巧克力 Lv.2→3 与 Lv.1→3 双升级 | A | `gainExperience` / `completeLevelUp` | 无 |
 | 升级二选一 | 已补来源记录与 UI 归属 | A/B | `levelUps` / `rewardPets` | 满槽和复杂生成物占位待 Oracle |
 | 单 Perk | 已对齐 | A | `pet.perks` | 复杂覆盖/合并边界待补 |
