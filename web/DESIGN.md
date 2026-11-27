@@ -62,6 +62,8 @@ information density and strong battle feedback.
 ### Perk glossary
 
 - Perk tags and Perk names embedded in pet abilities are interactive terms.
+- Food names embedded in abilities, such as Apple in Worm's description, are
+  also interactive Food terms. Perks and Foods use distinct link treatments.
 - Hover or keyboard focus shows a popover; click/tap pins the definition.
 - Mobile uses a bottom-sheet-style popover with an explicit close control.
 - Every Perk term includes its name and complete mechanical description.

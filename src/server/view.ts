@@ -74,6 +74,7 @@ export interface WebView {
     rewards: RewardGroupView[];
     levelUps: LevelUpView[];
     perkGlossary: PerkView[];
+    foodGlossary: FoodGlossaryView[];
     recentLog: string[];
     lastBattleOutcome: RunState["lastBattleOutcome"];
     lastBattleReplay: BattleReplayView | null;
@@ -93,6 +94,14 @@ export interface BattleReplayPetView {
 }
 
 export interface PerkView {
+  kind: "perk";
+  id: string;
+  nameZh: string;
+  description: string;
+}
+
+export interface FoodGlossaryView {
+  kind: "food";
   id: string;
   nameZh: string;
   description: string;
@@ -223,6 +232,7 @@ export interface RewardGroupView {
 
 function perkView(id: PerkId): PerkView {
   return {
+    kind: "perk",
     id,
     nameZh: perkNameZh(id),
     description: PERK_DESCRIPTION_ZH[id]
@@ -231,6 +241,15 @@ function perkView(id: PerkId): PerkView {
 
 function perkGlossary(): PerkView[] {
   return (Object.keys(PERK_DESCRIPTION_ZH) as PerkId[]).map(perkView);
+}
+
+function foodGlossary(content: ContentBundle): FoodGlossaryView[] {
+  return [...content.foods.values()].map((food) => ({
+    kind: "food",
+    id: food.id,
+    nameZh: foodNameZh(food.id, food.name),
+    description: foodTextZh(food.id, food.text)
+  }));
 }
 
 function xpThresholdForNextLevel(level: PetLevel): number | null {
@@ -571,6 +590,7 @@ export function buildWebView(
       rewards: rewardGroupsView(state, content),
       levelUps: levelUpsView(state),
       perkGlossary: perkGlossary(),
+      foodGlossary: foodGlossary(content),
       recentLog: state.log.slice(-120).map(battleLogLineZh),
       lastBattleOutcome: state.lastBattleOutcome,
       lastBattleReplay: battleReplayView(state, content)

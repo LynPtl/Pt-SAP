@@ -55,6 +55,7 @@ const refs = {
   gameOverDismiss: document.querySelector("#game-over-dismiss"),
   perkPopover: document.querySelector("#perk-popover"),
   perkPopoverTitle: document.querySelector("#perk-popover-title"),
+  perkPopoverKind: document.querySelector("#perk-popover-kind"),
   perkPopoverDescription: document.querySelector("#perk-popover-description"),
   perkPopoverClose: document.querySelector("#perk-popover-close")
 };
@@ -90,17 +91,31 @@ function perkGlossary() {
   return game?.state.perkGlossary ?? [];
 }
 
-function findPerk(perk) {
-  if (!perk) return null;
-  const id = typeof perk === "object" ? perk.id : perk;
-  const name = typeof perk === "object" ? perk.nameZh : perk;
+function foodGlossary() {
+  return game?.state.foodGlossary ?? [];
+}
+
+function termGlossary() {
+  return [...perkGlossary(), ...foodGlossary()];
+}
+
+function findGlossaryTerm(reference, kind = null) {
+  if (!reference) return null;
+  const object = typeof reference === "object" ? reference : null;
+  const id = object?.id ?? reference;
+  const name = object?.nameZh ?? reference;
+  const requestedKind = kind ?? object?.kind ?? null;
   return (
-    perkGlossary().find(
+    termGlossary().find(
       (entry) =>
-        entry.id === id ||
-        entry.nameZh === name
+        (!requestedKind || entry.kind === requestedKind) &&
+        (entry.id === id || entry.nameZh === name)
     ) ?? null
   );
+}
+
+function findPerk(perk) {
+  return findGlossaryTerm(perk, "perk");
 }
 
 function hidePerkPopover() {
@@ -118,7 +133,7 @@ function hidePerkPopover() {
 }
 
 function showPerkPopover(term, perk, pinned) {
-  const definition = findPerk(perk);
+  const definition = findGlossaryTerm(perk);
   if (!definition) return;
   const host = term.closest("dialog") ?? document.body;
   if (refs.perkPopover.parentElement !== host) host.append(refs.perkPopover);
@@ -129,6 +144,10 @@ function showPerkPopover(term, perk, pinned) {
   activePerkTerm = term;
   perkPopoverPinned = pinned;
   refs.perkPopoverTitle.textContent = definition.nameZh;
+  refs.perkPopoverKind.textContent =
+    definition.kind === "food" ? "食物" : "Perk";
+  refs.perkPopoverKind.className =
+    `glossary-kind ${definition.kind}`;
   refs.perkPopoverDescription.textContent = definition.description;
   refs.perkPopover.classList.remove("hidden");
   term.setAttribute("aria-expanded", "true");
@@ -177,16 +196,18 @@ function pointerInside(element, tolerance = 4) {
   );
 }
 
-function perkTerm(perk, className = "perk-term") {
-  const definition = findPerk(perk);
+function glossaryTerm(reference, className = "glossary-term", kind = null) {
+  const definition = findGlossaryTerm(reference, kind);
   if (!definition) return null;
   const term = el(
     "button",
-    `${className} perk-term`,
+    `${className} glossary-term ${definition.kind}-term`,
     definition.nameZh
   );
   term.type = "button";
-  term.dataset.perkId = definition.id;
+  term.dataset.termId = definition.id;
+  term.dataset.termKind = definition.kind;
+  if (definition.kind === "perk") term.dataset.perkId = definition.id;
   term.setAttribute("aria-expanded", "false");
   term.setAttribute("aria-haspopup", "dialog");
   term.setAttribute("aria-controls", "perk-popover");
@@ -196,23 +217,26 @@ function perkTerm(perk, className = "perk-term") {
     if (activePerkTerm === term && perkPopoverPinned) {
       hidePerkPopover();
     } else {
-      showPerkPopover(term, definition.id, true);
+      showPerkPopover(term, definition, true);
     }
   });
   term.addEventListener("mouseenter", () => {
-    if (!perkPopoverPinned) showPerkPopover(term, definition.id, false);
+    if (!perkPopoverPinned) showPerkPopover(term, definition, false);
   });
   term.addEventListener("focus", () => {
-    if (!perkPopoverPinned) showPerkPopover(term, definition.id, false);
+    if (!perkPopoverPinned) showPerkPopover(term, definition, false);
   });
   term.addEventListener("blur", schedulePerkHide);
   return term;
 }
 
+function perkTerm(perk, className = "perk-term") {
+  return glossaryTerm(perk, className, "perk");
+}
+
 function renderAbilityText(text, tagName = "p", className = "ability") {
   const node = el(tagName, className);
-  const names = perkGlossary()
-    .map((perk) => perk.nameZh)
+  const names = [...new Set(termGlossary().map((term) => term.nameZh))]
     .sort((a, b) => b.length - a.length);
   if (!text || names.length === 0) {
     node.textContent = text ?? "";
@@ -228,7 +252,19 @@ function renderAbilityText(text, tagName = "p", className = "ability") {
     if (index > lastIndex) {
       node.append(document.createTextNode(text.slice(lastIndex, index)));
     }
-    const term = perkTerm(match[0], "inline-perk-term");
+    const candidates = termGlossary().filter(
+      (entry) => entry.nameZh === match[0]
+    );
+    const suffix = text.slice(
+      index + match[0].length,
+      index + match[0].length + 8
+    );
+    const definition = suffix.match(/^\s*Perk\b/i)
+      ? candidates.find((entry) => entry.kind === "perk")
+      : candidates.find((entry) => entry.kind === "food") ?? candidates[0];
+    const term = definition
+      ? glossaryTerm(definition, "inline-term")
+      : null;
     node.append(term ?? document.createTextNode(match[0]));
     lastIndex = index + match[0].length;
   }

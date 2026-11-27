@@ -517,14 +517,30 @@ button:disabled {
   text-underline-offset: 2px;
 }
 
-.inline-perk-term {
+.food-term {
+  color: #0f766e;
+  cursor: help;
+  text-decoration: underline dotted;
+  text-decoration-color: #14b8a6;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.inline-term {
   display: inline;
   padding: 0;
   border: 0;
   background: transparent;
-  color: #92400e;
   font: inherit;
   font-weight: 600;
+}
+
+.inline-term.perk-term {
+  color: #92400e;
+}
+
+.inline-term.food-term {
+  color: #0f766e;
 }
 
 .pill.copy {
@@ -1217,8 +1233,37 @@ button:disabled {
   justify-content: space-between;
 }
 
+.perk-popover-title-wrap {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
 .perk-popover-heading strong {
   font-size: 15px;
+}
+
+.glossary-kind {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--secondary);
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.glossary-kind.perk {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.glossary-kind.food {
+  border-color: #99f6e4;
+  background: #f0fdfa;
+  color: #0f766e;
 }
 
 .perk-popover p {

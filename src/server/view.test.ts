@@ -60,6 +60,11 @@ test("web view exposes level-up causes and reward-group origins", () => {
       (perk) => perk.nameZh && perk.description
     )
   );
+  const apple = view.state.foodGlossary.find((food) => food.id === "apple");
+  assert.ok(apple);
+  assert.equal(apple.kind, "food");
+  assert.equal(apple.nameZh, "苹果");
+  assert.match(apple.description, /攻击/);
   assert.deepEqual(
     {
       name: view.state.levelUps[0].nameZh,
