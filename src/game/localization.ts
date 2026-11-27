@@ -399,7 +399,7 @@ export const FOOD_TEXT_ZH: Record<string, string> = {
   honey: "使一只宠物获得蜂蜜 Perk。倒下时：召唤一只 1/1 蜜蜂。",
   cupcake: "使一只宠物获得 +3 攻击和 +3 生命，直到战斗结束。",
   "meat-bone": "使一只宠物获得肉骨头 Perk。攻击时额外造成 +3 伤害。",
-  "sleeping-pill": "使一只宠物倒下。始终在售！",
+  "sleeping-pill": "使一只宠物倒下。始终特价 1 金。",
   cake: "使一只宠物获得蛋糕 Perk。回合结束时：出售价值增加 1 金。",
   garlic: "使一只宠物获得大蒜 Perk。受到的伤害减少 2 点。",
   "salad-bowl": "随机两只宠物获得 +1 攻击和 +1 生命。",
@@ -473,7 +473,10 @@ function localizeBattleBody(line: string): string {
   };
   if (fixed[body]) return fixed[body];
 
-  let match = body.match(
+  let match = body.match(/^(.+) triggers because (.+) attacks\.$/);
+  if (match) return `${match[1]} 因 ${match[2]} 攻击触发技能。`;
+
+  match = body.match(
     /^(.+) gains (\d+) level-ups?; receives (\d+) tier ([\d/]+) level-up reward choices?\.$/
   );
   if (match) {

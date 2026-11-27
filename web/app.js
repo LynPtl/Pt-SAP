@@ -873,10 +873,14 @@ function outcomeLabel(outcome) {
   return outcome === "win" ? "胜利" : outcome === "loss" ? "失败" : "平局";
 }
 
-function createBattlePetCard(pet, side) {
+function createBattlePetCard(pet, side, position = null) {
   const card = el("article", "battle-pet");
   card.dataset.uid = pet.uid;
   card.dataset.nameZh = pet.nameZh;
+  if (position !== null) card.dataset.position = String(position);
+  const slot = position !== null
+    ? el("span", "battle-slot", String(position))
+    : null;
   const title = el("h4", "", pet.nameZh);
   const english = el("span", "battle-pet-en", pet.name);
   const meta = el(
@@ -895,6 +899,7 @@ function createBattlePetCard(pet, side) {
     "battle-perks",
     pet.perks?.length ? pet.perks.join(" · ") : ""
   );
+  if (slot) card.append(slot);
   card.append(title, english, meta, stats, ability, perks);
   card.dataset.side = side;
   battleCards.set(pet.uid, card);
@@ -908,10 +913,50 @@ function createBattlePetCard(pet, side) {
 
 function fillBattleTeam(container, team, side) {
   container.replaceChildren();
-  team.forEach((pet) => container.append(createBattlePetCard(pet, side)));
+  team.forEach((pet, index) =>
+    container.append(createBattlePetCard(pet, side, index + 1))
+  );
   for (let index = team.length; index < 5; index++) {
     container.append(el("div", "battle-pet empty", "空"));
   }
+  updateBattleSlotBadges(container);
+}
+
+function updateBattleSlotBadges(container) {
+  let position = 1;
+  for (const card of container.children) {
+    if (card.classList.contains("empty")) continue;
+    card.dataset.position = String(position);
+    const badge = card.querySelector(".battle-slot");
+    if (badge) badge.textContent = String(position);
+    position++;
+  }
+}
+
+function normalizeBattleBoard(container) {
+  const active = [...container.children].filter(
+    (card) => !card.classList.contains("empty")
+  );
+  container.replaceChildren(...active);
+  for (let index = active.length; index < 5; index++) {
+    container.append(el("div", "battle-pet empty", "空"));
+  }
+  updateBattleSlotBadges(container);
+}
+
+function settleBattleBoard(container, state, side) {
+  if (!state?.units?.length) {
+    normalizeBattleBoard(container);
+    return;
+  }
+  const active = state.units
+    .filter((unit) => unit.side === side && unit.status === "active")
+    .sort((a, b) => a.position - b.position)
+    .map((unit) => battleCards.get(unit.uid))
+    .filter(Boolean);
+  if (active.length === 0 && container.children.length === 0) return;
+  container.replaceChildren(...active);
+  normalizeBattleBoard(container);
 }
 
 function opponentLabel(replay) {
@@ -1123,7 +1168,15 @@ function applyBattleEvent(event) {
       stats.alive = false;
       updateBattleCard(uid);
     }
-    if (card) card.classList.add("fainted");
+    if (card) card.remove();
+    battleCards.delete(uid);
+    battleStats.delete(uid);
+    const side =
+      event.side ??
+      (uid?.startsWith("enemy:") ? "enemy" : "player");
+    const container =
+      side === "enemy" ? refs.enemyBattleTeam : refs.playerBattleTeam;
+    settleBattleBoard(container, event.state, side);
   }
 
   if (event.type === "summon" && event.summoned) {
@@ -1131,11 +1184,21 @@ function applyBattleEvent(event) {
       event.side ?? (event.summoned.uid.startsWith("enemy:") ? "enemy" : "player");
     const container =
       side === "enemy" ? refs.enemyBattleTeam : refs.playerBattleTeam;
-    const empty = container.querySelector(".battle-pet.empty");
-    const card = createBattlePetCard(event.summoned, side);
+    const statePosition = event.state?.units?.find(
+      (unit) =>
+        unit.uid === event.summoned.uid &&
+        unit.side === side &&
+        unit.status === "active"
+    )?.position;
+    const position = Number(
+      event.values?.position ??
+        (statePosition !== undefined ? statePosition - 1 : 0)
+    );
+    const card = createBattlePetCard(event.summoned, side, position + 1);
     card.classList.add("summoned");
-    if (empty) empty.replaceWith(card);
-    else container.append(card);
+    const anchor = container.children[position] ?? null;
+    container.insertBefore(card, anchor);
+    settleBattleBoard(container, event.state, side);
   }
 
   if (event.type === "battleEnd") {

@@ -39,9 +39,10 @@
 | 2 个生成食物槽 | 已对齐容量与右侧位置 | A/B | `ShopState.foods` | 冻结、满槽多源冲突仍需 Oracle |
 | Worm 生成 Apple | 优先最右生成槽 | A/B | `stockWormFood` | 多 Worm 与全冻结边界待 Oracle |
 | Cow Milk / Chocolate Milk | 最右两格并补触发顺序 | A/B | `replaceShopFoodWithTwoMilk` | 跨奖励对象的像素级占位待 Oracle |
-| 3 金基础价格 | 已对齐 | A | `content.ts` | 特殊价格需逐项维护 |
+| 3 金基础价格 | 已对齐；“Always on sale”按特价解释 | A | `content.ts` / `randomFoodPool` | 特殊价格需逐项维护 |
 | 刷新 1 金、冻结免费 | 已对齐 | A | `run.ts` | 冻结排序细节待验证 |
 | 出售价值等于等级 | 已对齐 | A/B | `sellValueForPet` | 特殊修正需逐项测试 |
+| 满队购买限制 | 已对齐 | A | `buyPet` | 奖励宠物与普通宠物共用该规则 |
 | 2/3 XP 升级 | 已补巧克力 Lv.2→3 与 Lv.1→3 双升级 | A | `gainExperience` / `completeLevelUp` | 无 |
 | 升级二选一 | 已补来源记录与 UI 归属 | A/B | `levelUps` / `rewardPets` | 满槽和复杂生成物占位待 Oracle |
 | 单 Perk | 已对齐 | A | `pet.perks` | 复杂覆盖/合并边界待补 |
@@ -50,6 +51,7 @@
 | Hurt 先于 Faint | 已对齐 | B | hurt batch + death queue | 多死亡嵌套仍待补 |
 | 同时攻击都执行 | 已对齐 | A/B | `runAttackRound` | 复杂触发嵌套待补 |
 | 召唤上限 5 | 已对齐主路径 | B | `summon` | 特殊占位和顺序待补 |
+| 战斗回放召唤站位 | 已按事件位置展示并自动补位 | A | `settleBattleBoard` | 无 |
 | Whale 多次吞入 | 已补队列 | B/C | `swallowed[]` | 释放容量和嵌套 Whale 待 Oracle |
 | Tiger 重复技能 | 主路径已实现 | B/C | `extraAbilities` | 有限次数、链式 Tiger、复制记忆待补 |
 | Parrot 复制技能 | 主路径已实现 | B/C | `copiedAbility` | 复制链、升级与清理边界待补 |

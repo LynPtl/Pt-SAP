@@ -685,6 +685,13 @@ class BattleSim {
           context.attacker &&
           this.isNearestAhead(pet, context.attacker)
         ) {
+          this.log(
+            "trigger",
+            pet.side,
+            pet,
+            [context.attacker.uid],
+            `${pet.name} triggers because ${context.attacker.name} attacks.`
+          );
           this.buff(pet, level, level, pet, "Kangaroo");
         }
         break;

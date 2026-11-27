@@ -50,10 +50,18 @@ information density and strong battle feedback.
 - Show price, tier, frozen/generated state, ability and target type.
 - Disabled purchases use 45% opacity and retain a readable label.
 - Generated food slots are systematically separated from ordinary roll slots.
+- Shop cards must not collapse into one full-width card per row in narrow
+  windows. Use two columns below `640px`, three columns from `640px` through
+  the stacked-layout breakpoint, and auto-fit columns in the desktop shop panel.
+- Keep complete ability text visible; compact spacing and type size rather than
+  truncating game information.
 
 ### Battle theater
 
 - Shows both complete lineups, levels, stats, abilities and Perks.
+- Every battle card shows its current 1-based battle position. Faints compact
+  the surviving cards forward, and summons are inserted at the event-provided
+  position rather than filling the first empty card.
 - Attack event highlights the actor; damage event shakes the target, floats the
   damage number and updates health.
 - Faint, summon, buff and Perk events have distinct visible states.
@@ -108,4 +116,6 @@ information density and strong battle feedback.
 - [ ] Attack, damage, faint, summon and battle-end states are distinguishable.
 - [ ] Playback can pause, resume, replay and change speed.
 - [ ] Shop capacity matches tier and generated-slot rules.
+- [x] Shop remains a compact multi-column grid at 390px, 600px and 760px.
+- [x] Battle replay places summons at their actual 1-based battle position.
 - [ ] `prefers-reduced-motion` reduces battle and spinner animation.

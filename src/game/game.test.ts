@@ -155,6 +155,27 @@ test("normal turn progression expands pet shop capacity from 3 to 4 to 5", () =>
   assert.equal(state.shop.foods.length, 4);
 });
 
+test("Sleeping Pill is always discounted but not always stocked", () => {
+  const state = createRun("sleeping-pill-stock", content);
+  state.shopTier = 2;
+  let seen = false;
+  let missing = false;
+  for (let roll = 0; roll < 40; roll++) {
+    refreshShop(state, content, false);
+    const pills = state.shop.foods.filter(
+      (offer) => offer?.templateId === "sleeping-pill"
+    );
+    if (pills.length > 0) {
+      seen = true;
+      assert.ok(pills.every((offer) => offer?.cost === 1));
+    } else {
+      missing = true;
+    }
+  }
+  assert.equal(seen, true);
+  assert.equal(missing, true);
+});
+
 test("battle event stream is deterministic", () => {
   const input = {
     playerTeam: [pet("Ant", "a"), pet("Cricket", "c")],
@@ -184,6 +205,43 @@ test("start-of-battle damage is logged before the first attack", () => {
   assert.ok(firstDamage);
   assert.ok(firstAttack);
   assert.ok(firstDamage.seq < firstAttack.seq);
+});
+
+test("Spider's start-of-battle summon occupies Spider's current slot", () => {
+  const result = resolveBattle(
+    {
+      playerTeam: [
+        customPet("Cricket", "slot-cricket", 6, 8),
+        customPet("Kangaroo", "slot-kangaroo", 5, 5),
+        customPet("Spider", "slot-spider", 2, 2),
+        customPet("Fish", "slot-fish", 5, 7),
+        customPet("Penguin", "slot-penguin", 2, 3)
+      ],
+      enemyTeam: [
+        customPet("Rat", "slot-rat", 6, 9),
+        customPet("Dolphin", "slot-dolphin", 7, 3),
+        customPet("Snail", "slot-snail-a", 6, 7),
+        customPet("Snail", "slot-snail-b", 2, 3),
+        customPet("Dodo", "slot-dodo", 4, 2)
+      ],
+      seed: "dolphin-spider-slot"
+    },
+    content
+  );
+  const spiderDamage = result.events.find(
+    (event) =>
+      event.type === "damage" &&
+      event.actorUid === "enemy:slot-dolphin" &&
+      event.targetUids.includes("player:slot-spider")
+  );
+  const spiderSummon = result.events.find(
+    (event) =>
+      event.type === "summon" &&
+      event.values?.position === 2
+  );
+  assert.ok(spiderDamage);
+  assert.ok(spiderSummon);
+  assert.ok(spiderSummon.seq > spiderDamage.seq);
 });
 
 test("simultaneous attacks emit explicit player and enemy attack events", () => {
@@ -233,6 +291,146 @@ test("equal-attack trigger ties use seeded order instead of fixed player priorit
   assert.ok(firstDamageSides.has("enemy"));
 });
 
+test("Kangaroo only reacts when its nearest living friend ahead attacks", () => {
+  const result = resolveBattle(
+    {
+      playerTeam: [
+        customPet("Pig", "kangaroo-lead", 5, 1),
+        customPet("Pig", "kangaroo-middle", 2, 20),
+        customPet("Kangaroo", "kangaroo", 2, 20)
+      ],
+      enemyTeam: [customPet("Pig", "kangaroo-enemy", 5, 20)],
+      seed: "kangaroo-nearest-ahead"
+    },
+    content
+  );
+  const middleAttack = result.events.find(
+    (event) =>
+      event.type === "attack" && event.actorUid === "player:kangaroo-middle"
+  );
+  const firstBuff = result.events.find(
+    (event) =>
+      event.type === "buff" &&
+      event.actorUid === "player:kangaroo" &&
+      event.message.includes("Kangaroo gains")
+  );
+  assert.ok(middleAttack);
+  assert.ok(firstBuff);
+  assert.ok(firstBuff.seq > middleAttack.seq);
+});
+
+test("Kangaroo still triggers when the attacking friend ahead later faints", () => {
+  const result = resolveBattle(
+    {
+      playerTeam: [
+        customPet("Pig", "fainting-lead", 5, 1),
+        customPet("Kangaroo", "fainting-kangaroo", 2, 20)
+      ],
+      enemyTeam: [customPet("Pig", "fainting-enemy", 5, 20)],
+      seed: "kangaroo-fainting-ahead"
+    },
+    content
+  );
+  assert.ok(
+    result.events.some(
+      (event) =>
+        event.type === "buff" &&
+        event.actorUid === "player:fainting-kangaroo" &&
+        event.message.includes("Kangaroo gains")
+    )
+  );
+});
+
+test("Kangaroo visibly triggers when a summoned friend attacks", () => {
+  for (const summoner of [
+    "Cricket",
+    "Spider",
+    "Sheep",
+    "Deer",
+    "Hippogriff",
+    "Rooster"
+  ]) {
+    const result = resolveBattle(
+      {
+        playerTeam: [
+          customPet(summoner, `summoner-${summoner}`, 1, 1),
+          customPet("Kangaroo", `kangaroo-${summoner}`, 2, 50)
+        ],
+        enemyTeam: [customPet("Pig", `enemy-${summoner}`, 5, 100)],
+        seed: `kangaroo-summon-${summoner}`
+      },
+      content
+    );
+    const summon = result.events.find((event) => event.type === "summon");
+    assert.ok(summon, summoner);
+    const tokenUid = summon.targetUids[0];
+    assert.ok(tokenUid, summoner);
+    const tokenAttack = result.events.find(
+      (event) =>
+        event.type === "attack" &&
+        event.actorUid === tokenUid
+    );
+    const trigger = result.events.find(
+      (event) =>
+        event.type === "trigger" &&
+        event.actorUid === `player:kangaroo-${summoner}` &&
+        event.targetUids.includes(tokenUid) &&
+        event.message.includes("triggers because")
+    );
+    assert.ok(tokenAttack, summoner);
+    assert.ok(trigger, summoner);
+    assert.ok(trigger.seq > tokenAttack.seq, summoner);
+  }
+
+  const honeyFront = customPet("Pig", "honey-front", 1, 1);
+  honeyFront.perks = [{ id: "honey", sourceLevel: 1, uses: null }];
+  const honeyResult = resolveBattle(
+    {
+      playerTeam: [
+        honeyFront,
+        customPet("Kangaroo", "honey-kangaroo", 2, 50)
+      ],
+      enemyTeam: [customPet("Pig", "honey-enemy", 5, 100)],
+      seed: "kangaroo-honey-summon"
+    },
+    content
+  );
+  const bee = honeyResult.events.find(
+    (event) =>
+      event.type === "summon" &&
+      event.message.includes("Bee")
+  );
+  assert.ok(bee);
+  const beeUid = bee.targetUids[0];
+  const beeAttack = honeyResult.events.find(
+    (event) => event.type === "attack" && event.actorUid === beeUid
+  );
+  const beeTrigger = honeyResult.events.find(
+    (event) =>
+      event.type === "trigger" &&
+      event.actorUid === "player:honey-kangaroo" &&
+      event.targetUids.includes(beeUid) &&
+      event.message.includes("triggers because")
+  );
+  assert.ok(beeAttack);
+  assert.ok(beeTrigger);
+  assert.ok(beeTrigger.seq > beeAttack.seq);
+});
+
+test("Honey is a persistent perk across an Arena turn", () => {
+  const state = createRun("honey-persistence", content);
+  const honeyPet = pet("Ant", "honey-ant");
+  honeyPet.perks = [
+    { id: "honey", sourceLevel: 1, uses: null }
+  ];
+  state.team = [honeyPet];
+
+  assert.equal(endTurn(state, content, []).ok, true);
+  assert.ok(
+    state.team[0].perks.some((perk) => perk.id === "honey")
+  );
+});
+
 test("merging duplicate pets grants experience and stats", () => {
   const state = createRun("merge-test", content);
   const template = content.petsByTitle.get("Ant");
@@ -258,6 +456,56 @@ test("merging duplicate pets grants experience and stats", () => {
   assert.equal(state.team[0].xp, 1);
   assert.equal(state.team[0].attack, 3);
   assert.equal(state.team[0].health, 3);
+});
+
+test("a full team can only buy a pet that merges into an existing copy", () => {
+  const state = createRun("full-team-purchase", content);
+  const antTemplate = content.petsByTitle.get("Ant");
+  const pigTemplate = content.petsByTitle.get("Pig");
+  assert.ok(antTemplate);
+  assert.ok(pigTemplate);
+  state.team = [
+    pet("Ant", "full-ant"),
+    pet("Beaver", "full-beaver"),
+    pet("Cricket", "full-cricket"),
+    pet("Fish", "full-fish"),
+    pet("Horse", "full-horse")
+  ];
+  state.gold = 10;
+  state.shop.pets[0] = {
+    kind: "pet",
+    itemId: "full-team-new-pet",
+    templateId: pigTemplate.id,
+    cost: 3,
+    attackBonus: 0,
+    healthBonus: 0,
+    rewardGroup: null,
+    frozen: false,
+    reward: false
+  };
+  const rejected = buyPet(state, content, 0);
+  assert.equal(rejected.ok, false);
+  assert.match(rejected.message, /队伍已满/);
+  assert.equal(state.gold, 10);
+  assert.equal(state.team.length, 5);
+  assert.ok(state.shop.pets[0]);
+
+  state.shop.pets[1] = {
+    kind: "pet",
+    itemId: "full-team-duplicate",
+    templateId: antTemplate.id,
+    cost: 3,
+    attackBonus: 0,
+    healthBonus: 0,
+    rewardGroup: null,
+    frozen: false,
+    reward: false
+  };
+  const merged = buyPet(state, content, 1);
+  assert.equal(merged.ok, true);
+  assert.equal(state.gold, 7);
+  assert.equal(state.team.length, 5);
+  assert.equal(state.team[0].xp, 1);
 });
 
 test("a level-up reward pair allows only one purchase", () => {

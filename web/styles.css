@@ -225,9 +225,11 @@ button:disabled {
   grid-template-columns: minmax(0, 1.15fr) minmax(420px, 1fr);
   gap: 16px;
   align-items: start;
+  min-width: 0;
 }
 
 .panel {
+  min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -243,6 +245,10 @@ button:disabled {
   min-height: 64px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
+}
+
+.panel-heading > * {
+  min-width: 0;
 }
 
 .panel-heading h2,
@@ -277,6 +283,7 @@ button:disabled {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   padding: 12px;
+  min-width: 0;
 }
 
 .pet-card {
@@ -523,6 +530,10 @@ button:disabled {
   margin-bottom: 8px;
 }
 
+.section-title > * {
+  min-width: 0;
+}
+
 .section-title h3 {
   margin: 0;
   font-size: 16px;
@@ -533,6 +544,7 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
+  min-width: 0;
 }
 
 .shop-grid.foods {
@@ -542,6 +554,7 @@ button:disabled {
 .shop-card {
   display: flex;
   min-height: 182px;
+  min-width: 0;
   flex-direction: column;
   gap: 8px;
   padding: 12px;
@@ -569,10 +582,15 @@ button:disabled {
   justify-content: space-between;
 }
 
+.shop-card-header > * {
+  min-width: 0;
+}
+
 .shop-card h4 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .price {
@@ -919,6 +937,23 @@ button:disabled {
     filter 120ms ease;
 }
 
+.battle-slot {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid #3f3f46;
+  border-radius: var(--radius-sm);
+  background: #27272a;
+  color: #d4d4d8;
+  font-family: "Fira Code", ui-monospace, monospace;
+  font-size: 10px;
+  line-height: 1;
+}
+
 .battle-pet.empty {
   opacity: 0.25;
   border-style: dashed;
@@ -992,6 +1027,7 @@ button:disabled {
 
 .battle-pet h4 {
   margin: 0;
+  padding-left: 18px;
   color: #fafafa;
   font-size: 14px;
   font-weight: 600;
@@ -1407,18 +1443,83 @@ button:disabled {
     grid-template-columns: repeat(5, minmax(145px, 1fr));
     overflow-x: auto;
   }
+
+  .shop-grid,
+  .shop-grid.foods {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
   .topbar {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
-    padding: 12px 16px;
+    padding: 10px 12px;
+  }
+
+  .brand {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .brand-mark {
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+  }
+
+  .brand h1 {
+    font-size: 18px;
+    white-space: nowrap;
+  }
+
+  .brand p {
+    max-width: 180px;
+    overflow: hidden;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topbar-actions {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .topbar-actions .button {
+    min-height: 32px;
+    padding: 6px 8px;
+    font-size: 12px;
+    white-space: nowrap;
   }
 
   .stats {
     grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    gap: 4px;
     justify-content: flex-start;
+    overflow: hidden;
+  }
+
+  .stat {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 5px 3px;
+  }
+
+  .stat b {
+    font-size: 15px;
+  }
+
+  .stat span {
+    font-size: 10px;
   }
 
   .page {
@@ -1427,6 +1528,7 @@ button:disabled {
   }
 
   .panel-heading {
+    flex-wrap: wrap;
     align-items: flex-start;
   }
 
@@ -1436,17 +1538,57 @@ button:disabled {
   }
 
   .team-grid {
-    grid-template-columns: repeat(5, 220px);
+    grid-template-columns: repeat(5, 172px);
     padding: 8px;
   }
 
   .shop-grid,
   .shop-grid.foods {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .shop-card {
     min-height: 0;
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .shop-card h4 {
+    font-size: 14px;
+  }
+
+  .shop-card .pet-name-en,
+  .price {
+    font-size: 11px;
+  }
+
+  .shop-card .ability {
+    font-size: 11px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  .shop-card .stat-line strong {
+    font-size: 21px;
+  }
+
+  .shop-card .card-actions {
+    gap: 3px;
+  }
+
+  .shop-card .mini-button {
+    min-width: 0;
+    padding: 5px 4px;
+  }
+
+  .section-title {
+    flex-wrap: wrap;
+    gap: 2px 8px;
+  }
+
+  .section-title span {
+    font-size: 11px;
   }
 
   .turn-actions {
@@ -1454,12 +1596,12 @@ button:disabled {
     flex-direction: column;
   }
 
-  .button.primary {
+  .turn-actions .button.primary {
     width: 100%;
   }
 
   .reward-pair {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .battle-team {
@@ -1485,5 +1627,47 @@ button:disabled {
 
   .game-over-actions .button {
     width: 100%;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 760px) {
+  .shop-grid,
+  .shop-grid.foods {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .brand p {
+    display: none;
+  }
+
+  .brand h1 {
+    font-size: 17px;
+  }
+
+  .topbar-actions .button {
+    padding-inline: 6px;
+  }
+
+  .panel-heading {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .legend {
+    max-width: none;
+    flex-basis: 100%;
+    text-align: left;
+  }
+
+  .shop-section {
+    padding: 10px 10px 0;
+  }
+
+  .level-up-toast {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
   }
 }
