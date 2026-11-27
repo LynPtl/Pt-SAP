@@ -1335,7 +1335,7 @@ button:disabled {
 }
 
 .game-over-dialog {
-  width: min(620px, calc(100% - 24px));
+  width: min(1180px, calc(100% - 24px));
   border-color: #111111;
 }
 
@@ -1451,26 +1451,55 @@ button:disabled {
   padding-top: 4px;
 }
 
-.game-over-team-wrap h3 {
+.game-over-team-heading {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
   margin-bottom: 8px;
+  text-align: left;
+}
+
+.game-over-team-heading h3 {
+  margin: 0;
   color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 500;
 }
 
-.game-over-team {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: center;
+.game-over-team-heading span {
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
 
-.game-over-pet {
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--secondary);
+.game-over-team {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+}
+
+.final-pet-card {
+  min-width: 0;
+  min-height: 230px;
+  cursor: default;
+}
+
+.final-pet-card:hover {
+  border-color: var(--border);
+  background: var(--card);
+}
+
+.final-pet-ability {
   font-size: 12px;
+}
+
+.final-pet-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 4px;
 }
 
 .game-over-actions {
@@ -1840,7 +1869,21 @@ button:disabled {
   }
 }
 
+@media (max-width: 900px) {
+  .game-over-team {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+}
+
 @media (max-width: 480px) {
+  .game-over-shell {
+    padding: 20px 16px 18px;
+  }
+
+  .game-over-team {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .brand p {
     display: none;
   }
@@ -1880,6 +1923,12 @@ button:disabled {
 
   .shop-gold-copy strong {
     font-size: 17px;
+  }
+
+  .game-over-team-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .level-up-toast {

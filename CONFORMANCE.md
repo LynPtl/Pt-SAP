@@ -71,6 +71,7 @@
 | Arena Easy/Hard | 未实现 | — | Normal only | 不在当前范围 |
 | Versus/With Friends | 未实现 | — | — | 不在当前范围 |
 | 成就/收藏/红丝带持久化 | 展示层部分 | A | 胜利结算 | 没有账户级收藏 |
+| 结算最终阵容 | 已展示完整只读队伍卡 | A | `renderFinalPetCard` | 无 |
 | 全部 180 个技能等级 | 有执行入口 | — | `battle.ts` / `run.ts` | 未逐条差分验证 |
 
 ## P0：继续实现顺序

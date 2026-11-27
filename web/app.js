@@ -118,6 +118,8 @@ function hidePerkPopover() {
 function showPerkPopover(term, perk, pinned) {
   const definition = findPerk(perk);
   if (!definition) return;
+  const host = term.closest("dialog") ?? document.body;
+  if (refs.perkPopover.parentElement !== host) host.append(refs.perkPopover);
   clearTimeout(perkHideTimer);
   if (activePerkTerm) {
     activePerkTerm.setAttribute("aria-expanded", "false");
@@ -284,17 +286,15 @@ function showGameOver(state = game?.state) {
     refs.gameOverStats.append(item);
   }
   refs.gameOverTeam.replaceChildren();
-  if (state.team.length === 0) {
-    refs.gameOverTeam.append(el("span", "muted", "无存活阵容"));
-  } else {
-    for (const pet of state.team) {
-      refs.gameOverTeam.append(
-        el(
-          "span",
-          "game-over-pet",
-          `${pet.nameZh} · Lv.${pet.level} · ${pet.attack}/${pet.health}`
-        )
-      );
+  const teamBySlot = new Map(state.team.map((pet) => [pet.index, pet]));
+  for (let index = 1; index <= state.maxTeamSize; index++) {
+    const pet = teamBySlot.get(index);
+    if (pet) {
+      refs.gameOverTeam.append(renderFinalPetCard(pet));
+    } else {
+      const empty = el("div", "pet-card final-pet-card empty");
+      empty.append(el("b", "", String(index)), el("span", "", "空槽位"));
+      refs.gameOverTeam.append(empty);
     }
   }
   showNotice(
@@ -698,6 +698,69 @@ function renderXpProgress(pet) {
   track.append(fill);
   wrap.append(label, track);
   return wrap;
+}
+
+function renderFinalPetCard(pet) {
+  const card = el("article", "pet-card final-pet-card");
+  card.setAttribute("aria-label", `最终阵容第 ${pet.index} 格 ${pet.nameZh}`);
+  card.append(el("span", "slot-badge", `${pet.index}`));
+
+  const heading = el("div", "pet-heading");
+  heading.append(el("h3", "pet-title", pet.nameZh));
+  heading.append(el("span", "pet-name-en", pet.name));
+  card.append(heading);
+
+  const meta = el("div", "pet-meta");
+  meta.append(el("span", "pill", `${pet.tier} 阶`));
+  meta.append(
+    el(
+      "span",
+      "pill",
+      pet.nextLevelXp
+        ? `Lv.${pet.level} · 本级 ${pet.levelXp}/${pet.levelXpRequired}`
+        : "Lv.3 · 已满级"
+    )
+  );
+  for (const perk of pet.perks) {
+    const term = perkTerm(perk, "pill perk");
+    if (term) meta.append(term);
+  }
+  if (pet.copiedAbilityName) {
+    meta.append(el("span", "pill copy", `复制：${pet.copiedAbilityName}`));
+  }
+  card.append(meta);
+
+  if (pet.levelXpRequired) card.append(renderXpProgress(pet));
+
+  const stats = el("div", "stat-line");
+  stats.append(
+    el("strong", "attack", String(pet.attack)),
+    el("span", "", "攻击"),
+    el("strong", "health", String(pet.health)),
+    el("span", "", "生命")
+  );
+  card.append(stats);
+
+  if (pet.battleAttackBonus || pet.battleHealthBonus) {
+    card.append(
+      el(
+        "div",
+        "battle-bonus",
+        `本场加成：+${pet.battleAttackBonus}/+${pet.battleHealthBonus}`
+      )
+    );
+  }
+  card.append(
+    renderAbilityText(
+      pet.ability,
+      "p",
+      "ability final-pet-ability"
+    )
+  );
+  const footer = el("div", "final-pet-footer");
+  footer.append(el("span", "pill", `出售 +${pet.sellValue} 金`));
+  card.append(footer);
+  return card;
 }
 
 function handleTeamClick(pet) {

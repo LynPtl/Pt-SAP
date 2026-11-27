@@ -86,6 +86,9 @@ information density and strong battle feedback.
 - Victory uses a distinct success treatment, WIN mark and red-ribbon notice when
   the final lineup contains a level-three pet.
 - It shows the end reason, final turn, wins, lives, seed and final lineup.
+- The final lineup reuses a read-only version of the complete team cards:
+  five ordered slots, full abilities, stats, XP, Perk glossary terms and sell
+  values. Missing pets remain visible as empty slots.
 - Primary actions are “再来一局” and “重看最终战斗”.
 - The final battle replay is labeled as the final battle before it ends.
 
