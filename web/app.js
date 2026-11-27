@@ -74,6 +74,8 @@ let goldAnimationTimer = null;
 let activePerkTerm = null;
 let perkPopoverPinned = false;
 let perkHideTimer = null;
+let perkPointerX = null;
+let perkPointerY = null;
 const battleCards = new Map();
 const battleStats = new Map();
 
@@ -164,6 +166,17 @@ function schedulePerkHide() {
   perkHideTimer = setTimeout(hidePerkPopover, 140);
 }
 
+function pointerInside(element, tolerance = 4) {
+  if (!element || perkPointerX === null || perkPointerY === null) return false;
+  const rect = element.getBoundingClientRect();
+  return (
+    perkPointerX >= rect.left - tolerance &&
+    perkPointerX <= rect.right + tolerance &&
+    perkPointerY >= rect.top - tolerance &&
+    perkPointerY <= rect.bottom + tolerance
+  );
+}
+
 function perkTerm(perk, className = "perk-term") {
   const definition = findPerk(perk);
   if (!definition) return null;
@@ -189,7 +202,6 @@ function perkTerm(perk, className = "perk-term") {
   term.addEventListener("mouseenter", () => {
     if (!perkPopoverPinned) showPerkPopover(term, definition.id, false);
   });
-  term.addEventListener("mouseleave", schedulePerkHide);
   term.addEventListener("focus", () => {
     if (!perkPopoverPinned) showPerkPopover(term, definition.id, false);
   });
@@ -1608,7 +1620,23 @@ refs.perkPopoverClose.addEventListener("click", (event) => {
 refs.perkPopover.addEventListener("mouseenter", () => {
   clearTimeout(perkHideTimer);
 });
-refs.perkPopover.addEventListener("mouseleave", schedulePerkHide);
+document.addEventListener(
+  "pointermove",
+  (event) => {
+    perkPointerX = event.clientX;
+    perkPointerY = event.clientY;
+    if (!activePerkTerm || perkPopoverPinned) return;
+    if (
+      pointerInside(activePerkTerm) ||
+      pointerInside(refs.perkPopover)
+    ) {
+      clearTimeout(perkHideTimer);
+    } else {
+      schedulePerkHide();
+    }
+  },
+  { passive: true }
+);
 document.addEventListener("pointerdown", (event) => {
   if (
     !event.target.closest(".perk-term") &&

@@ -65,6 +65,9 @@ information density and strong battle feedback.
 - Hover or keyboard focus shows a popover; click/tap pins the definition.
 - Mobile uses a bottom-sheet-style popover with an explicit close control.
 - Every Perk term includes its name and complete mechanical description.
+- Battle-card zoom/hit transforms must not dismiss a hovered Perk explanation;
+  non-pinned explanations close only after real pointer movement leaves both
+  the term and the popover.
 
 ### Battle theater
 
