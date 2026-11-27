@@ -15,10 +15,11 @@ import {
 import type { PetLevel } from "./types.js";
 
 const content = loadContent();
+const puppyContent = loadContent("puppy");
 
 test("every Turtle Pack pet has a Chinese name and three ability texts", () => {
-  assert.equal(Object.keys(PET_NAME_ZH).length, 60);
-  assert.equal(Object.keys(PET_ABILITY_ZH).length, 60);
+  assert.ok(Object.keys(PET_NAME_ZH).length >= 60);
+  assert.ok(Object.keys(PET_ABILITY_ZH).length >= 60);
   for (const pet of content.pets.values()) {
     assert.ok(PET_NAME_ZH[pet.title], `missing name: ${pet.title}`);
     const abilities = PET_ABILITY_ZH[pet.title];
@@ -35,8 +36,8 @@ test("every Turtle Pack pet has a Chinese name and three ability texts", () => {
 });
 
 test("every Turtle Pack food has Chinese name and description", () => {
-  assert.equal(Object.keys(FOOD_NAME_ZH).length, 22);
-  assert.equal(Object.keys(FOOD_TEXT_ZH).length, 22);
+  assert.ok(Object.keys(FOOD_NAME_ZH).length >= 22);
+  assert.ok(Object.keys(FOOD_TEXT_ZH).length >= 22);
   for (const food of content.foods.values()) {
     assert.ok(FOOD_NAME_ZH[food.id], `missing food name: ${food.id}`);
     assert.ok(FOOD_TEXT_ZH[food.id], `missing food text: ${food.id}`);
@@ -51,6 +52,25 @@ test("every food perk has a Chinese name and glossary description", () => {
   for (const [id, description] of Object.entries(PERK_DESCRIPTION_ZH)) {
     assert.ok(PERK_NAME_ZH[id], `missing perk name: ${id}`);
     assert.ok(description.trim(), `missing perk description: ${id}`);
+  }
+});
+
+test("every Puppy Pack pet and food has Chinese display text", () => {
+  for (const pet of puppyContent.pets.values()) {
+    assert.ok(PET_NAME_ZH[pet.title], `missing Puppy name: ${pet.title}`);
+    const abilities = PET_ABILITY_ZH[pet.title];
+    assert.ok(abilities, `missing Puppy abilities: ${pet.title}`);
+    for (const level of [1, 2, 3] as PetLevel[]) {
+      assert.match(
+        petAbilityZh(pet.title, level, ""),
+        /[\u4e00-\u9fff]/,
+        `missing Chinese ability: ${pet.title} level ${level}`
+      );
+    }
+  }
+  for (const food of puppyContent.foods.values()) {
+    assert.ok(FOOD_NAME_ZH[food.id], `missing Puppy food name: ${food.id}`);
+    assert.ok(FOOD_TEXT_ZH[food.id], `missing Puppy food text: ${food.id}`);
   }
 });
 

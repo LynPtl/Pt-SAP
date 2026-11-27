@@ -23,6 +23,7 @@ import {
   mergeTeamPets,
   movePet,
   refreshShop,
+  resolvePendingChoice,
   sellPet
 } from "../game/run.js";
 import type {
@@ -69,6 +70,7 @@ type ActionBody =
   | { type: "move"; uid: string; targetSlot: number }
   | { type: "merge"; sourceUid: string; targetUid: string }
   | { type: "freeze"; kind: "pet" | "food"; slot: number }
+  | { type: "choose"; option: string }
   | { type: "roll" }
   | { type: "end" };
 
@@ -314,6 +316,11 @@ function applyAction(
       }
       return Promise.resolve(
         freezeShopItem(state, body.kind, body.slot)
+      );
+    case "choose":
+      requireString(body.option, "option");
+      return Promise.resolve(
+        resolvePendingChoice(state, content, body.option)
       );
     case "roll":
       return Promise.resolve(refreshShop(state, content, true));

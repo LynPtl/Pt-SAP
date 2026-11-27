@@ -1,5 +1,10 @@
 import { resolveBattle } from "./battle.js";
 import { deriveSeed, SeededRandom } from "./rng.js";
+import {
+  TOY_GROUPS,
+  TOY_TEMPLATES,
+  toyOptionsForPet
+} from "./toys.js";
 import type {
   BattleOutcome,
   ContentBundle,
@@ -15,7 +20,8 @@ import type {
   ShopFoodItem,
   ShopFoodSlot,
   ShopPetItem,
-  ShopPetSlot
+  ShopPetSlot,
+  ToyId
 } from "./types.js";
 
 const TEAM_SIZE = 5;
@@ -82,6 +88,40 @@ function addLog(state: RunState, message: string): void {
   if (state.log.length > 300) state.log.splice(0, state.log.length - 300);
 }
 
+function presentFoodId(petName: string): string {
+  return `${petName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")}-present`;
+}
+
+function stockGeneratedFood(
+  state: RunState,
+  content: ContentBundle,
+  templateId: string,
+  cost = 0
+): ShopFoodItem | null {
+  const capacity = state.shop.foods.length;
+  const generatedStart = Math.max(
+    0,
+    capacity - GENERATED_FOOD_SLOT_CAPACITY
+  );
+  let slot = -1;
+  for (let index = capacity - 1; index >= generatedStart; index--) {
+    if (!state.shop.foods[index]?.frozen) {
+      slot = index;
+      break;
+    }
+  }
+  if (slot < 0) return null;
+  const offer = makeShopFood(state, content, templateId, {
+    cost,
+    generated: true
+  });
+  state.shop.foods[slot] = offer;
+  return offer;
+}
+
 function orderShopTriggers<T>(
   state: RunState,
   values: T[],
@@ -135,10 +175,16 @@ function createPetInstance(
     level,
     xp,
     attack: capStat(
-      template.baseAttack + state.shopPetBuff.attack + attackBonus
+      template.baseAttack +
+        state.shopPetBuff.attack +
+        (state.shopPetTurnBuff?.attack ?? 0) +
+        attackBonus
     ),
     health: capStat(
-      template.baseHealth + state.shopPetBuff.health + healthBonus
+      template.baseHealth +
+        state.shopPetBuff.health +
+        (state.shopPetTurnBuff?.health ?? 0) +
+        healthBonus
     ),
     battleStats: { attack: 0, health: 0 },
     perks: [],
@@ -266,6 +312,10 @@ export function refreshShop(
     ...nextGeneratedFoods.slice(0, GENERATED_FOOD_SLOT_CAPACITY)
   ];
   state.shopRngState = rng.state;
+  if (chargeGold) {
+    state.rollsThisTurn = (state.rollsThisTurn ?? 0) + 1;
+    state.goldSpentThisTurn = (state.goldSpentThisTurn ?? 0) + 1;
+  }
   if (chargeGold) state.gold--;
   addLog(state, chargeGold ? "刷新商店，消耗 1 金。" : "商店已刷新。");
   return success(chargeGold ? "已刷新，消耗 1 金。" : "商店已刷新。");
@@ -435,12 +485,21 @@ function addBattleStats(
   pet.battleStats.health = capStat(pet.battleStats.health + health);
 }
 
+function initialPerkUses(id: PerkId): number | null {
+  if (id === "coconut" || id === "walnut") return 1;
+  if (id === "salt" || id === "egg" || id === "squash") return 1;
+  if (id === "lemon") return 2;
+  if (id === "eucalyptus") return 1;
+  return null;
+}
+
 function addPerk(pet: PetInstance, id: PerkId, level: PetLevel): void {
+  pet.ailment = null;
   pet.perks = [
     {
       id,
       sourceLevel: level,
-      uses: id === "coconut" ? 1 : null
+      uses: initialPerkUses(id)
     } satisfies PerkState
   ];
 }
@@ -487,6 +546,31 @@ function triggerBuyAbilities(
   if (boughtPet.name === "Cow") {
     replaceShopFoodWithTwoMilk(state, content, boughtPet.level, "milk");
     addLog(state, `Cow 用 ${boughtPet.level} 级牛奶替换了商店食物。`);
+  }
+
+  if (boughtPet.name === "Anglerfish") {
+    const options = [
+      ...new Set((state.lastOpponentTeam ?? []).map((pet) => pet.templateId))
+    ].filter((templateId) => content.pets.has(templateId));
+    if (options.length > 0) {
+      state.pendingChoices ??= [];
+      state.pendingChoices.push({
+        kind: "opponentPet",
+        sourceUid: boughtPet.uid,
+        options
+      });
+      addLog(state, "Anglerfish 提供了上一对手的免费宠物选择。");
+    }
+  }
+
+  for (const goat of state.team.filter(
+    (pet) => pet.name === "Goat" && pet.uid !== boughtPet.uid
+  )) {
+    const uses = goat.triggerCounters.goatBuys ?? 0;
+    if (uses >= 2) continue;
+    goat.triggerCounters.goatBuys = uses + 1;
+    state.gold += goat.level;
+    addLog(state, `Goat 因友方购买获得 ${goat.level} 金。`);
   }
 
   if (boughtPet.tier === 1) {
@@ -572,6 +656,8 @@ export function buyPet(
   }
 
   state.gold -= offer.cost;
+  state.goldSpentThisTurn =
+    (state.goldSpentThisTurn ?? 0) + offer.cost;
   const rewardGroup = offer.rewardGroup;
   consumeOffer(
     state,
@@ -686,6 +772,44 @@ export function sellPet(
       }
     }
     addLog(state, `${pet.name} 的出售效果强化了商店宠物。`);
+  } else if (pet.name === "Chinchilla") {
+    summonShopToken(state, {
+      name: "Loyal Chinchilla",
+      attack: 2 * pet.level,
+      health: 2 * pet.level,
+      tier: 1,
+      level: pet.level,
+      index
+    });
+  }
+
+  for (const shrimp of state.team.filter(
+    (friend) => friend.name === "Shrimp"
+  )) {
+    const uses = shrimp.triggerCounters.shrimpUses ?? 0;
+    if (uses >= 3) continue;
+    const rng = new SeededRandom(
+      deriveSeed(state.seed, "shrimp-sold", state.turn, shrimp.uid, pet.uid)
+    );
+    const target = rng.pick(
+      state.team.filter((friend) => friend.uid !== shrimp.uid)
+    );
+    if (target) {
+      shrimp.triggerCounters.shrimpUses = uses + 1;
+      addPermanentStats(target, 0, shrimp.level);
+      addLog(state, `Shrimp 为 ${target.name} 增加 ${shrimp.level} 生命。`);
+    }
+    state.shopRngState = rng.state;
+  }
+  for (const buffalo of state.team.filter(
+    (friend) => friend.name === "Buffalo"
+  )) {
+    addBattleStats(
+      buffalo,
+      buffalo.level * 2,
+      buffalo.level * 2
+    );
+    addLog(state, `Buffalo 因友方出售获得本回合 +${buffalo.level * 2}/+${buffalo.level * 2}。`);
   }
   addLog(state, `出售 ${pet.name}，获得 ${gold} 金。`);
   return success(`已出售 ${pet.name}，获得 ${gold} 金。`);
@@ -693,7 +817,15 @@ export function sellPet(
 
 export function sellValueForPet(pet: PetInstance): number {
   const cakeBonus = pet.triggerCounters.cakeSellBonus ?? 0;
-  return pet.level + cakeBonus + (pet.name === "Pig" ? pet.level : 0);
+  const riceBonus = pet.perks.some((perk) => perk.id === "rice") ? 2 : 0;
+  const goldFishBonus = pet.triggerCounters.goldFishSellBonus ?? 0;
+  return (
+    pet.level +
+    cakeBonus +
+    riceBonus +
+    goldFishBonus +
+    (pet.name === "Pig" ? pet.level : 0)
+  );
 }
 
 export function movePet(
@@ -789,6 +921,47 @@ export function freezeShopItem(
   return success(item.frozen ? "已冻结。" : "已解除冻结。");
 }
 
+export function resolvePendingChoice(
+  state: RunState,
+  content: ContentBundle,
+  option: string
+): ActionResult {
+  if (state.phase !== "shop") return failure("当前不在商店阶段。");
+  const choice = state.pendingChoices?.[0];
+  if (!choice) return failure("当前没有待选择内容。");
+  if (!(choice.options as readonly string[]).includes(option)) {
+    return failure("该选项不在当前候选中。");
+  }
+
+  if (choice.kind === "toy") {
+    const source = petById(state, choice.sourceUid);
+    if (!source) return failure("Toy 来源宠物已不在队伍中。");
+    state.activeToy = {
+      id: option as ToyId,
+      sourceUid: source.uid,
+      level: choice.level,
+      remainingTurns: 2
+    };
+    addLog(state, `选择了 Toy ${option}。`);
+  } else {
+    const templateId = option;
+    const slot = state.shop.pets.findIndex((offer) => offer === null);
+    if (slot < 0) return failure("普通宠物商店槽已满。");
+    const template = content.pets.get(templateId);
+    if (!template) return failure("该幽灵宠物已不存在。");
+    state.shop.pets[slot] = makeShopPet(
+      state,
+      content,
+      templateId,
+      0,
+      false
+    );
+    addLog(state, `Anglerfish 上架了免费的 ${template.title}。`);
+  }
+  state.pendingChoices?.shift();
+  return success("选择已生效。");
+}
+
 function catMultiplier(state: RunState): number {
   const cat = state.team.find(
     (pet) =>
@@ -833,6 +1006,7 @@ function foodTargets(
     case "canned-food":
       return { pets: [] };
     default:
+      if (food.id.endsWith("-present")) return { pets: [] };
       return byUid ? { pets: [byUid] } : { pets: [], error: "请指定食物目标。" };
   }
 }
@@ -898,6 +1072,20 @@ function applyFoodEffect(
     state.shopPetBuff.health = capStat(
       state.shopPetBuff.health + multiplier
     );
+    return;
+  }
+  if (food.templateId.endsWith("-present")) {
+    const template = content.foods.get(food.templateId);
+    const sourcePet = (template?.name ?? "").replace(/\s+Present$/i, "");
+    const options = TOY_GROUPS[sourcePet];
+    if (!options) throw new Error(`Unknown toy present: ${food.templateId}`);
+    state.pendingChoices ??= [];
+    state.pendingChoices.push({
+      kind: "toy",
+      sourceUid: "present",
+      level: 1,
+      options: [...options]
+    });
     return;
   }
   if (!target) throw new Error(`Food ${food.templateId} requires a target`);
@@ -968,10 +1156,213 @@ function applyFoodEffect(
     case "peanut":
       addPerk(target, "peanut", 1);
       break;
+    case "egg":
+      addPerk(target, "egg", 1);
+      break;
+    case "lime":
+      addPerk(target, "lime", 1);
+      break;
+    case "rice":
+      addPerk(target, "rice", 1);
+      break;
+    case "squash":
+      addPerk(target, "squash", 1);
+      break;
+    case "blackberry":
+      addPerk(target, "blackberry", 1);
+      addPermanentStats(target, multiplier, 2 * multiplier);
+      break;
+    case "croissant":
+      addPerk(target, "croissant", 1);
+      break;
+    case "pie":
+      addPerk(target, "pie", 1);
+      break;
+    case "salt":
+      addPerk(target, "salt", 1);
+      break;
+    case "lemon":
+      addPerk(target, "lemon", 1);
+      break;
+    case "pancakes":
+      addPerk(target, "pancakes", 1);
+      break;
+    case "skewer":
+      addPerk(target, "skewer", 1);
+      break;
+    case "lasagna":
+      addPermanentStats(
+        target,
+        2 * multiplier,
+        3 * multiplier
+      );
+      break;
     case "sleeping-pill":
       break;
     default:
       throw new Error(`No food handler for ${food.templateId}`);
+  }
+}
+
+function summonShopToken(
+  state: RunState,
+  options: {
+    name: string;
+    attack: number;
+    health: number;
+    tier: PetInstance["tier"];
+    level: PetLevel;
+    index: number;
+    templateId?: string;
+  }
+): PetInstance | null {
+  if (state.team.length >= TEAM_SIZE) {
+    addLog(state, `${options.name} 因队伍已满而无法召唤。`);
+    return null;
+  }
+  const token: PetInstance = {
+    uid: nextId(state, "pet"),
+    templateId:
+      options.templateId ??
+      `token-${options.name.toLowerCase().replace(/\W+/g, "-")}`,
+    name: options.name,
+    tier: options.tier,
+    level: options.level,
+    xp: options.level === 3 ? 5 : options.level === 2 ? 2 : 0,
+    attack: capStat(options.attack),
+    health: capStat(options.health),
+    battleStats: { attack: 0, health: 0 },
+    perks: [],
+    ailment: null,
+    triggerCounters: {},
+    copiedAbility: null
+  };
+  const index = Math.max(0, Math.min(options.index, state.team.length));
+  state.team.splice(index, 0, token);
+  for (const friend of state.team) {
+    if (friend.uid === token.uid) continue;
+    if (friend.name === "Lobster") {
+      addPermanentStats(token, friend.level, friend.level * 2);
+    }
+    if (friend.name === "Horse") {
+      addBattleStats(token, friend.level, 0);
+    }
+    if (friend.name === "Dog") {
+      addBattleStats(friend, friend.level * 2, friend.level);
+    }
+    if (friend.name === "Turkey") {
+      addPermanentStats(token, friend.level * 3, friend.level);
+    }
+  }
+  addLog(state, `${token.name} 被召唤到第 ${index + 1} 位。`);
+  return token;
+}
+
+function breakActiveToy(
+  state: RunState,
+  content: ContentBundle
+): void {
+  const toy = state.activeToy;
+  if (!toy) return;
+  const source = state.team.find((pet) => pet.uid === toy.sourceUid);
+  const levels: PetLevel[] = [toy.level];
+  for (const pet of state.team) {
+    if (pet.name === "Puma") levels.push(pet.level);
+  }
+  for (const level of levels) {
+    switch (toy.id) {
+      case "balloon": {
+        const target = state.team.at(-1);
+        if (target) addPermanentStats(target, level, level);
+        break;
+      }
+      case "radio":
+        for (const target of state.team) addPermanentStats(target, 0, level);
+        break;
+      case "ovenMitts":
+        for (let count = 0; count < level; count++) {
+          stockGeneratedFood(state, content, "lasagna");
+        }
+        break;
+      case "melonHelmet":
+        for (const target of state.team.slice(-level)) {
+          addPerk(target, "melon", level);
+        }
+        break;
+      case "flashlight": {
+        const target = state.team.at(-1);
+        if (target) addPermanentStats(target, 6 * level, 6 * level);
+        break;
+      }
+      case "television":
+        for (const target of state.team) {
+          addPermanentStats(target, 2 * level, 2 * level);
+        }
+        break;
+      case "cashRegister": {
+        const index = source
+          ? state.team.findIndex((pet) => pet.uid === source.uid)
+          : state.team.length;
+        const fish = summonShopToken(state, {
+          name: "Gold Fish",
+          attack: 2 * level,
+          health: 2 * level,
+          tier: 2,
+          level,
+          index: Math.max(0, index)
+        });
+        if (fish) {
+          fish.triggerCounters.goldFishSellBonus = level;
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  const flyingSquirrels = state.team.filter(
+    (pet) => pet.name === "Flying Squirrel"
+  );
+  for (const squirrel of flyingSquirrels) {
+    addPermanentStats(squirrel, 2 * squirrel.level, 0);
+  }
+  const restoredLevel = flyingSquirrels.reduce<PetLevel>(
+    (level, squirrel) =>
+      squirrel.level > level ? squirrel.level : level,
+    1
+  );
+  if (source) {
+    const sourceIndex = state.team.findIndex(
+      (pet) => pet.uid === source.uid
+    );
+    for (const mosasaurus of state.team.filter(
+      (pet) => pet.name === "Mosasaurus"
+    )) {
+      for (const target of [
+        state.team[sourceIndex - 1],
+        state.team[sourceIndex + 1]
+      ]) {
+        if (target) {
+          addPermanentStats(
+            target,
+            2 * mosasaurus.level,
+            3 * mosasaurus.level
+          );
+        }
+      }
+    }
+  }
+  addLog(state, `Toy ${toy.id} 已损坏。`);
+  state.activeToy = null;
+  if (flyingSquirrels.length > 0 && source) {
+    state.activeToy = {
+      id: toy.id,
+      sourceUid: source.uid,
+      level: restoredLevel,
+      remainingTurns: 2
+    };
+    addLog(state, `Flying Squirrel 重新召回了 Toy ${toy.id}。`);
   }
 }
 
@@ -1033,6 +1424,9 @@ function triggerShopFaint(
       }
       if (friend.name === "Hippogriff") {
         addBattleStats(token, friend.level, 0);
+      }
+      if (friend.name === "Lobster") {
+        addPermanentStats(token, friend.level, friend.level * 2);
       }
       if (friend.name === "Turkey") {
         addPermanentStats(token, friend.level * 3, friend.level);
@@ -1207,6 +1601,48 @@ function triggerShopFaint(
           addPerk(target, "melon", current.level);
         }
         break;
+      case "Tahr":
+        for (const target of state.team.slice(
+          currentIndex + 1,
+          currentIndex + 1 + current.level
+        )) {
+          addPerk(target, "mildChili", current.level);
+        }
+        break;
+      case "Mandrill":
+        if (
+          state.activeToy &&
+          TOY_TEMPLATES[state.activeToy.id].tier <=
+            (2 * current.level)
+        ) {
+          breakActiveToy(state, content);
+        }
+        break;
+      case "Mole": {
+        const candidates = state.team
+          .filter((friend) => friend.perks.length > 0)
+          .sort(
+            (a, b) =>
+              Math.abs(
+                state.team.indexOf(a) - currentIndex
+              ) -
+                Math.abs(state.team.indexOf(b) - currentIndex) ||
+              state.team.indexOf(a) - state.team.indexOf(b)
+          )
+          .slice(0, 2);
+        if (candidates.length === 2) {
+          for (const target of candidates) target.perks = [];
+          addToken(
+            "Mole",
+            6 * current.level,
+            6 * current.level,
+            3,
+            current.level,
+            currentIndex
+          );
+        }
+        break;
+      }
       default:
         break;
     }
@@ -1266,11 +1702,17 @@ export function buyFood(
   if (!food) return failure("未知食物。");
   const targets = foodTargets(state, food, targetUid);
   if (targets.error) return failure(targets.error);
-  if (food.id !== "canned-food" && targets.pets.length === 0) {
+  if (
+    food.id !== "canned-food" &&
+    !food.id.endsWith("-present") &&
+    targets.pets.length === 0
+  ) {
     return failure("当前没有合法目标。");
   }
 
   state.gold -= offer.cost;
+  state.goldSpentThisTurn =
+    (state.goldSpentThisTurn ?? 0) + offer.cost;
   consumeOffer(state, "food", slot);
 
   if (food.id === "canned-food") {
@@ -1278,7 +1720,11 @@ export function buyFood(
     addLog(state, "Canned Food 强化了当前和未来的商店宠物。");
     return success("Canned Food 已生效。");
   }
-
+  if (food.id.endsWith("-present")) {
+    applyFoodEffect(state, content, offer, null);
+    addLog(state, `${food.name} 已开启 Toy 选择。`);
+    return success("请选择一项 Toy。");
+  }
   for (const target of targets.pets) {
     if (food.id === "sleeping-pill") {
       if (target.perks.some((perk) => perk.id === "mushroom")) {
@@ -1304,7 +1750,10 @@ export function buyFood(
   return success(`${food.name} 已生效。`);
 }
 
-function runEndTurnAbilities(state: RunState): void {
+function runEndTurnAbilities(
+  state: RunState,
+  content: ContentBundle
+): void {
   let bisonTriggered = false;
   const ordered = orderShopTriggers(
     state,
@@ -1354,6 +1803,40 @@ function runEndTurnAbilities(state: RunState): void {
       };
       addLog(state, `${pet.name} 复制了前方友军的技能。`);
     }
+    if (pet.name === "Bluebird") {
+      const rng = new SeededRandom(
+        deriveSeed(state.seed, "bluebird", state.turn, pet.uid)
+      );
+      const target = rng.pick(
+        state.team.filter((friend) => friend.uid !== pet.uid)
+      );
+      if (target) {
+        addPermanentStats(target, pet.level, 0);
+        addLog(state, `Bluebird 为 ${target.name} 增加 ${pet.level} 攻击。`);
+      }
+      state.shopRngState = rng.state;
+    }
+    if (pet.name === "Hatching Chick" && index > 0) {
+      const target = state.team[index - 1];
+      if (pet.level === 3) {
+        gainExperience(state, content, target, 1, true);
+      } else {
+        addBattleStats(
+          target,
+          pet.level === 1 ? 3 : 2,
+          pet.level === 1 ? 3 : 2
+        );
+      }
+      addLog(state, `Hatching Chick 强化了前方友军。`);
+    }
+    if (pet.name === "Llama" && state.team.length < 5) {
+      addPermanentStats(pet, pet.level, 2 * pet.level);
+      addLog(state, `Llama 因存在空位获得 +${pet.level}/+${2 * pet.level}。`);
+    }
+    if (pet.perks.some((perk) => perk.id === "croissant")) {
+      addPermanentStats(pet, 1, 0);
+      addLog(state, `Croissant 令 ${pet.name} 获得 +1 攻击。`);
+    }
     if (pet.perks.some((perk) => perk.id === "cake")) {
       pet.triggerCounters.cakeSellBonus =
         (pet.triggerCounters.cakeSellBonus ?? 0) + 1;
@@ -1373,6 +1856,40 @@ function runStartTurnAbilities(
   );
   for (const pet of ordered) {
     const index = state.team.findIndex((entry) => entry.uid === pet.uid);
+    const template = content.pets.get(pet.templateId);
+    const toyOptions = template
+      ? toyOptionsForPet(template)
+      : null;
+    if (toyOptions) {
+      const toyAlreadySelected =
+        Boolean(state.activeToy) ||
+        Boolean(
+          state.pendingChoices?.some((choice) => choice.kind === "toy")
+        );
+      if (toyAlreadySelected) {
+        const present = stockGeneratedFood(
+          state,
+          content,
+          presentFoodId(pet.name)
+        );
+        if (present) {
+          addLog(
+            state,
+            `${pet.name} 因已有 Toy，上架了免费的 ${pet.name} Present。`
+          );
+        }
+      } else {
+        state.pendingChoices ??= [];
+        state.pendingChoices.push({
+          kind: "toy",
+          sourceUid: pet.uid,
+          level: pet.level,
+          options: [...toyOptions]
+        });
+        addLog(state, `${pet.name} 提供了 Toy 选择。`);
+      }
+      continue;
+    }
     switch (pet.name) {
       case "Swan":
         state.gold += pet.level;
@@ -1425,6 +1942,74 @@ function runStartTurnAbilities(
         }
         addLog(state, `${pet.name} 将所有商店食物降价 ${pet.level} 金。`);
         break;
+      case "Gold Fish":
+        pet.triggerCounters.goldFishSellBonus =
+          (pet.triggerCounters.goldFishSellBonus ?? 0) + pet.level;
+        addLog(state, `Gold Fish 的出售价值增加 ${pet.level} 金。`);
+        break;
+      case "Dromedary":
+        for (const offer of state.shop.pets.slice(0, 2)) {
+          if (!offer) continue;
+          offer.attackBonus += pet.level;
+          offer.healthBonus += pet.level;
+        }
+        addLog(state, `Dromedary 强化了最左侧两只商店宠物。`);
+        break;
+      case "Owl": {
+        const mouse = summonShopToken(state, {
+          name: "Mouse",
+          attack: pet.level * 2 - 1,
+          health: pet.level * 2,
+          tier: 1,
+          level: pet.level,
+          index: index + 1
+        });
+        if (mouse) addLog(state, `Owl 召唤了 Mouse。`);
+        break;
+      }
+      case "Caterpillar":
+        gainExperience(state, content, pet, 1, true);
+        addLog(state, `Caterpillar 获得 1 点经验。`);
+        break;
+      case "Chicken":
+        state.shopPetTurnBuff ??= { attack: 0, health: 0 };
+        state.shopPetTurnBuff.attack = capStat(
+          state.shopPetTurnBuff.attack + pet.level
+        );
+        state.shopPetTurnBuff.health = capStat(
+          state.shopPetTurnBuff.health + pet.level
+        );
+        addLog(state, `Chicken 使本回合未来商店宠物获得 +${pet.level}/+${pet.level}。`);
+        break;
+      case "Tyrannosaurus": {
+        const rng = new SeededRandom(
+          deriveSeed(state.seed, "tyrannosaurus", state.turn, pet.uid)
+        );
+        const targets = rng.sample(
+          state.team.filter(
+            (friend) => friend.uid !== pet.uid && friend.tier >= 5
+          ),
+          2
+        );
+        for (const target of targets) {
+          addPermanentStats(target, 2 * pet.level, 2 * pet.level);
+        }
+        state.shopRngState = rng.state;
+        if (targets.length > 0) {
+          addLog(state, `Tyrannosaurus 强化了 ${targets.length} 名高阶友军。`);
+        }
+        break;
+      }
+      case "Tropical Fish": {
+        for (const target of [
+          state.team[index - 1],
+          state.team[index + 1]
+        ]) {
+          if (target) addPermanentStats(target, 0, pet.level);
+        }
+        addLog(state, `Tropical Fish 强化了相邻友军。`);
+        break;
+      }
       default:
         break;
     }
@@ -1480,9 +2065,24 @@ function startNextTurn(state: RunState, content: ContentBundle): void {
   state.turn++;
   state.phase = "shop";
   state.gold = STARTING_GOLD;
+  const deferredGold = state.nextTurnGold ?? 0;
+  state.gold += deferredGold;
+  state.nextTurnGold = 0;
+  if (deferredGold > 0) {
+    addLog(state, `上回合延迟获得 ${deferredGold} 金。`);
+  }
+  state.rollsThisTurn = 0;
+  state.goldSpentThisTurn = 0;
+  state.shopPetTurnBuff = { attack: 0, health: 0 };
   state.shopTier = shopTierForTurn(state.turn);
   state.shop.rewardPets = [];
   state.levelUps = [];
+  if (state.activeToy) {
+    state.activeToy.remainingTurns--;
+    if (state.activeToy.remainingTurns <= 0) {
+      breakActiveToy(state, content);
+    }
+  }
   if (state.turn === 3 && state.lives < STARTING_LIVES) {
     state.lives = Math.min(STARTING_LIVES, state.lives + 1);
     addLog(state, "第 3 回合补偿：恢复 1 点生命。");
@@ -1618,18 +2218,24 @@ export function endTurn(
   }
 ): EndTurnResult {
   if (state.phase !== "shop") return failure("当前不在商店阶段。");
+  if ((state.pendingChoices?.length ?? 0) > 0) {
+    return failure("请先完成 Toy 或宠物选择。");
+  }
   state.phase = "battle";
-  runEndTurnAbilities(state);
+  runEndTurnAbilities(state, content);
   const playerSnapshot = structuredClone(state.team);
   const enemy = opponentTeam
     ? structuredClone(opponentTeam)
     : generateGhostTeam(state, content);
+  state.lastOpponentTeam = structuredClone(enemy);
   const battleSeed = deriveSeed(state.seed, "turn", state.turn);
   const result = resolveBattle(
     {
       playerTeam: state.team,
       enemyTeam: enemy,
-      seed: battleSeed
+      seed: battleSeed,
+      activeToy: state.activeToy,
+      rollsThisTurn: state.rollsThisTurn ?? 0
     },
     content
   );
@@ -1661,6 +2267,10 @@ export function endTurn(
     addLog(state, `[战斗] ${event.message}`);
   }
   state.lastBattleOutcome = result.outcome;
+  if (result.playerNextTurnGold) {
+    state.nextTurnGold =
+      (state.nextTurnGold ?? 0) + result.playerNextTurnGold;
+  }
 
   if (result.outcome === "win") {
     state.wins++;
@@ -1724,6 +2334,13 @@ export function createRun(seed: string, content: ContentBundle): RunState {
       rewardPets: []
     },
     shopPetBuff: { attack: 0, health: 0 },
+    shopPetTurnBuff: { attack: 0, health: 0 },
+    activeToy: null,
+    pendingChoices: [],
+    rollsThisTurn: 0,
+    goldSpentThisTurn: 0,
+    nextTurnGold: 0,
+    lastOpponentTeam: [],
     lastBattleOutcome: null,
     lastBattleReplay: null,
     levelUps: [],

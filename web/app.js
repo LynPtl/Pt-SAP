@@ -11,6 +11,9 @@ const refs = {
   shopGold: document.querySelector("#shop-gold"),
   shopGoldValue: document.querySelector("#shop-gold-value"),
   goldChange: document.querySelector("#gold-change"),
+  activeToy: document.querySelector("#active-toy"),
+  choiceSection: document.querySelector("#choice-section"),
+  choiceOptions: document.querySelector("#choice-options"),
   foodShop: document.querySelector("#food-shop"),
   rewardSection: document.querySelector("#reward-section"),
   rewardShop: document.querySelector("#reward-shop"),
@@ -521,6 +524,50 @@ function render() {
     requestInFlight || gameOver || game.state.gold < 1;
   refs.endTurn.disabled = requestInFlight || gameOver;
   refs.endTurnTop.disabled = requestInFlight || gameOver;
+  renderChoices();
+}
+
+function renderChoices() {
+  const pending = game.state.pendingChoices ?? [];
+  refs.choiceSection.classList.toggle("hidden", pending.length === 0);
+  refs.choiceOptions.replaceChildren();
+  const choice = pending[0];
+  if (choice) {
+    refs.choiceOptions.append(
+      el(
+        "p",
+        "choice-source",
+        choice.kind === "toy"
+          ? `${choice.sourceNameZh} 提供一个 Toy 选择`
+          : `${choice.sourceNameZh} 提供上一对手的免费宠物`
+      )
+    );
+    for (const option of choice.options) {
+      refs.choiceOptions.append(
+        button(
+          `${option.nameZh}${option.name !== option.nameZh ? ` · ${option.name}` : ""}`,
+          "button secondary choice-button",
+          async () => {
+            await performAction(
+              { type: "choose", option: option.id },
+              "选择已生效。"
+            );
+          }
+        )
+      );
+    }
+  }
+  const blocked = pending.length > 0;
+  if (blocked) {
+    refs.endTurn.disabled = true;
+    refs.endTurnTop.disabled = true;
+  }
+
+  const toy = game.state.activeToy;
+  refs.activeToy.classList.toggle("hidden", !toy);
+  refs.activeToy.textContent = toy
+    ? `当前 Toy：${toy.nameZh} · Lv.${toy.level} · 剩余 ${toy.remainingTurns} 回合`
+    : "";
 }
 
 function renderPackSelection() {
@@ -685,6 +732,11 @@ function renderPetCard(pet) {
   for (const perk of pet.perks) {
     const term = perkTerm(perk, "pill perk");
     if (term) meta.append(term);
+  }
+  if (pet.ailment === "weak") {
+    const weak = el("span", "pill ailment", "Weak");
+    weak.title = "Weak：每次受到伤害时额外承受 3 点伤害。";
+    meta.append(weak);
   }
   if (pet.copiedAbilityName) {
     meta.append(el("span", "pill copy", `复制：${pet.copiedAbilityName}`));
@@ -1215,6 +1267,11 @@ function createBattlePetCard(pet, side, position = null) {
   for (const perk of pet.perks ?? []) {
     const term = perkTerm(perk, "battle-perk-term");
     if (term) perks.append(term);
+  }
+  if (pet.ailment === "weak") {
+    const weak = el("span", "battle-perk-term ailment", "Weak");
+    weak.title = "Weak：每次受到伤害时额外承受 3 点伤害。";
+    perks.append(weak);
   }
   if (slot) card.append(slot);
   card.append(title, english, meta, stats, ability, perks);

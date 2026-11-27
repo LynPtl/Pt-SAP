@@ -26,6 +26,7 @@ import {
   ghostStatAmountForTurn,
   mergeTeamPets,
   refreshShop,
+  resolvePendingChoice,
   sellPet,
   stockWormFood
 } from "./run.js";
@@ -37,13 +38,15 @@ import type {
 } from "./types.js";
 
 const content = loadContent();
+const puppyContent = loadContent("puppy");
 
-function pet(
+function petFrom(
+  bundle: typeof content,
   title: string,
   uid: string,
   level: PetLevel = 1
 ): PetInstance {
-  const template = content.petsByTitle.get(title);
+  const template = bundle.petsByTitle.get(title);
   assert.ok(template, `missing template ${title}`);
   return {
     uid,
@@ -59,6 +62,22 @@ function pet(
     triggerCounters: {},
     copiedAbility: null
   };
+}
+
+function pet(
+  title: string,
+  uid: string,
+  level: PetLevel = 1
+): PetInstance {
+  return petFrom(content, title, uid, level);
+}
+
+function puppyPet(
+  title: string,
+  uid: string,
+  level: PetLevel = 1
+): PetInstance {
+  return petFrom(puppyContent, title, uid, level);
 }
 
 function customPet(
@@ -746,6 +765,108 @@ test("all Turtle Pack pets can enter battle without missing handlers", () => {
       false
     );
   }
+});
+
+test("all Puppy Pack pets can enter battle without missing handlers", () => {
+  const templates = [...puppyContent.pets.values()];
+  for (let index = 0; index < templates.length; index += 5) {
+    const group = templates.slice(index, index + 5);
+    const team = group.map((template, offset) =>
+      puppyPet(template.title, `puppy-all-${index}-${offset}`, 3)
+    );
+    const result = resolveBattle(
+      {
+        playerTeam: team,
+        enemyTeam: [
+          puppyPet("Beetle", `puppy-enemy-${index}`),
+          puppyPet("Doberman", `puppy-enemy-h-${index}`, 3)
+        ],
+        seed: `puppy-all-${index}`
+      },
+      puppyContent
+    );
+    assert.equal(
+      result.events.some(
+        (event) =>
+          event.type === "warning" &&
+          event.message.includes("No battle handler")
+      ),
+      false
+    );
+  }
+});
+
+test("all Puppy Pack food effects execute", () => {
+  for (const food of puppyContent.foods.values()) {
+    const state = createRun(`puppy-food-${food.id}`, puppyContent);
+    const target = puppyPet("Beetle", `puppy-food-target-${food.id}`);
+    state.team = [target];
+    state.gold = 10;
+    state.shop.foods = [
+      {
+        kind: "food",
+        itemId: `puppy-food-${food.id}`,
+        templateId: food.id,
+        cost: food.cost,
+        generated: food.tokenOnly,
+        frozen: false,
+        reward: false
+      },
+      null,
+      null,
+      null
+    ];
+    const noTarget =
+      food.id === "canned-food" || food.id.endsWith("-present");
+    const result = buyFood(
+      state,
+      puppyContent,
+      0,
+      noTarget ? undefined : target.uid
+    );
+    assert.equal(
+      result.ok,
+      true,
+      `${food.id}: ${result.message}`
+    );
+  }
+});
+
+test("Puppy Ferret queues and resolves a Toy choice", () => {
+  const state = createRun("puppy-toy-choice", puppyContent);
+  state.team = [puppyPet("Ferret", "puppy-ferret", 2)];
+  endTurn(state, puppyContent, [puppyPet("Beetle", "puppy-toy-enemy")]);
+  assert.equal(state.pendingChoices?.length, 1);
+  const choice = state.pendingChoices?.[0];
+  assert.equal(choice?.kind, "toy");
+  const result = resolvePendingChoice(
+    state,
+    puppyContent,
+    "balloon"
+  );
+  assert.equal(result.ok, true);
+  assert.equal(state.activeToy?.id, "balloon");
+  assert.equal(state.activeToy?.level, 2);
+});
+
+test("Weak increases every incoming damage instance by 3", () => {
+  const attacker = puppyPet("Bluebird", "weak-attacker");
+  const defender = puppyPet("Bluebird", "weak-defender");
+  defender.ailment = "weak";
+  const result = resolveBattle(
+    {
+      playerTeam: [attacker],
+      enemyTeam: [defender],
+      seed: "weak-damage"
+    },
+    puppyContent
+  );
+  const firstDamage = result.events.find(
+    (event) =>
+      event.type === "damage" &&
+      event.targetUids.includes(`enemy:${defender.uid}`)
+  );
+  assert.equal(firstDamage?.values?.damage, 5);
 });
 
 test("frozen offers move to the left-most shop slots", () => {

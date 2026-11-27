@@ -286,6 +286,34 @@ button:disabled {
   justify-content: flex-end;
 }
 
+.active-toy {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-md);
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.choice-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.choice-source {
+  width: 100%;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.choice-button {
+  min-height: 40px;
+}
+
 .shop-gold-wrap {
   position: relative;
 }

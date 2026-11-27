@@ -6,6 +6,7 @@ import {
   packById,
   type StaticPackId
 } from "./packs.js";
+import { TOY_GROUPS } from "./toys.js";
 import type {
   ContentBundle,
   FoodTemplate,
@@ -139,6 +140,32 @@ export function loadContent(
     tokenOnly: true,
     text: "Give one pet attack only."
   });
+  if (packId === "puppy" && !foods.has("egg")) {
+    foods.set("egg", {
+      id: "egg",
+      name: "Egg",
+      tier: 1,
+      cost: 3,
+      tokenOnly: false,
+      text: "Give one pet the Egg Perk. Before attack: Deal 2 damage, once."
+    });
+  }
+  if (packId === "puppy") {
+    for (const sourcePet of Object.keys(TOY_GROUPS)) {
+      const id = `${sourcePet
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")}-present`;
+      foods.set(id, {
+        id,
+        name: `${sourcePet} Present`,
+        tier: null,
+        cost: 0,
+        tokenOnly: true,
+        text: `Choose one level 1 ${sourcePet} toy.`
+      });
+    }
+  }
 
   return {
     packId,

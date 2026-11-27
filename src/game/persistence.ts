@@ -63,6 +63,13 @@ function migrateRunState(
   const foodCapacity = totalFoodShopCapacity(state.shopTier);
   state.packId ??= DEFAULT_PACK_ID;
   state.contentVersion ??= TURTLE_CONTENT_VERSION;
+  state.activeToy ??= null;
+  state.pendingChoices ??= [];
+  state.rollsThisTurn ??= 0;
+  state.goldSpentThisTurn ??= 0;
+  state.shopPetTurnBuff ??= { attack: 0, health: 0 };
+  state.nextTurnGold ??= 0;
+  state.lastOpponentTeam ??= [];
 
   const pets = [...state.shop.pets];
   while (pets.length < petCapacity) pets.push(null);

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { loadContent } from "../game/content.js";
+import { PERK_DESCRIPTION_ZH } from "../game/localization.js";
 import { buyFood, createRun, mergeTeamPets } from "../game/run.js";
 import type {
   PetInstance,
@@ -54,7 +55,10 @@ test("web view exposes level-up causes and reward-group origins", () => {
   const view = buildWebView(state, content, "view-session");
 
   assert.equal(view.state.levelUps.length, 1);
-  assert.equal(view.state.perkGlossary.length, 10);
+  assert.equal(
+    view.state.perkGlossary.length,
+    Object.keys(PERK_DESCRIPTION_ZH).length
+  );
   assert.ok(
     view.state.perkGlossary.every(
       (perk) => perk.nameZh && perk.description

@@ -18,7 +18,61 @@ export type PerkId =
   | "mushroom"
   | "steak"
   | "coconut"
-  | "peanut";
+  | "peanut"
+  | "egg"
+  | "walnut"
+  | "lime"
+  | "rice"
+  | "squash"
+  | "blackberry"
+  | "croissant"
+  | "pie"
+  | "salt"
+  | "lemon"
+  | "pancakes"
+  | "skewer"
+  | "mildChili"
+  | "eucalyptus";
+
+export type AilmentId = "weak";
+
+export type ToyId =
+  | "balloon"
+  | "stick"
+  | "radio"
+  | "tennisBall"
+  | "plasticSaw"
+  | "melonHelmet"
+  | "foamSword"
+  | "toyGun"
+  | "ovenMitts"
+  | "toiletPaper"
+  | "cashRegister"
+  | "flashlight"
+  | "stinkySock"
+  | "television"
+  | "peanutJar"
+  | "airPalmTree";
+
+export interface ToyInstance {
+  id: ToyId;
+  sourceUid: string;
+  level: PetLevel;
+  remainingTurns: number;
+}
+
+export interface ToyChoice {
+  kind: "toy";
+  sourceUid: string;
+  level: PetLevel;
+  options: ToyId[];
+}
+
+export interface OpponentPetChoice {
+  kind: "opponentPet";
+  sourceUid: string;
+  options: string[];
+}
 
 export interface PerkState {
   id: PerkId;
@@ -58,6 +112,7 @@ export interface PetInstance {
     health: number;
   };
   perks: PerkState[];
+  ailment?: AilmentId | null;
   triggerCounters: Record<string, number>;
   copiedAbility: {
     templateId: string;
@@ -135,6 +190,16 @@ export interface RunState {
     attack: number;
     health: number;
   };
+  shopPetTurnBuff?: {
+    attack: number;
+    health: number;
+  };
+  activeToy?: ToyInstance | null;
+  pendingChoices?: Array<ToyChoice | OpponentPetChoice>;
+  rollsThisTurn?: number;
+  goldSpentThisTurn?: number;
+  nextTurnGold?: number;
+  lastOpponentTeam?: PetInstance[];
   lastBattleOutcome: BattleOutcome | null;
   lastBattleReplay: BattleReplayData | null;
   levelUps: LevelUpRecord[];
@@ -153,6 +218,7 @@ export interface BattlePet {
   health: number;
   side: BattleSide;
   perks: PerkState[];
+  ailment: AilmentId | null;
   copiedAbility: {
     templateId: string;
     level: PetLevel;
@@ -182,6 +248,7 @@ export interface BattleUnitSnapshot {
   position: number;
   status: BattleUnitStatus;
   perks: PerkId[];
+  ailment: AilmentId | null;
   swallowedBy: string | null;
 }
 
@@ -216,6 +283,7 @@ export interface BattleResult {
   events: BattleEvent[];
   playerSurvivors: number;
   enemySurvivors: number;
+  playerNextTurnGold?: number;
 }
 
 export interface BattleReplayData {
@@ -233,6 +301,8 @@ export interface BattleInput {
   playerTeam: PetInstance[];
   enemyTeam: PetInstance[];
   seed: string;
+  activeToy?: ToyInstance | null;
+  rollsThisTurn?: number;
 }
 
 export interface ContentBundle {

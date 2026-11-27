@@ -41,7 +41,12 @@ type TriggerKind =
   | "friendFaint"
   | "friendSummoned"
   | "friendAheadAttack"
-  | "friendHurt";
+  | "friendHurt"
+  | "friendGainedPerk"
+  | "thisGainedPerk"
+  | "friendGainedAilment"
+  | "thisGainedAilment"
+  | "friendLostPerk";
 
 function levelNumber(level: PetLevel): PetLevel {
   return level;
@@ -67,6 +72,7 @@ function clonePet(pet: PetInstance, side: BattleSide): BattlePet {
     health: maxStat(pet.health + pet.battleStats.health),
     side,
     perks: pet.perks.map((perk) => ({ ...perk })),
+    ailment: pet.ailment ?? null,
     copiedAbility: pet.copiedAbility
       ? {
           templateId: pet.copiedAbility.templateId,
@@ -103,6 +109,7 @@ function tokenPet(options: {
     health: maxStat(options.health),
     side: options.side,
     perks: [],
+    ailment: null,
     copiedAbility: null,
     extraAbilities: [],
     triggeredThisBattle: {},
@@ -116,12 +123,15 @@ function tokenPet(options: {
 
 class BattleSim {
   private readonly content: ContentBundle;
+  private readonly activeToy: BattleInput["activeToy"];
+  private readonly rollsThisTurn: number;
   private readonly rng: SeededRandom;
   private readonly triggerRng: SeededRandom;
   private readonly boards: Record<BattleSide, BattlePet[]>;
   private readonly events: BattleEvent[] = [];
   private readonly dying = new Map<string, BattlePet>();
   private readonly fallen: BattlePet[] = [];
+  private readonly lastHitBy = new Map<string, BattlePet | null>();
   private readonly pendingHurts: Array<{
     target: BattlePet;
     source: BattlePet | null;
@@ -129,6 +139,8 @@ class BattleSim {
   private sequence = 0;
   private triggerBudget = 0;
   private tokenCounter = 0;
+  private battleTurn = 0;
+  private playerNextTurnGold = 0;
   private flushingHurts = false;
 
   constructor(
@@ -136,6 +148,8 @@ class BattleSim {
     content: ContentBundle
   ) {
     this.content = content;
+    this.activeToy = input.activeToy ?? null;
+    this.rollsThisTurn = input.rollsThisTurn ?? 0;
     this.rng = new SeededRandom(deriveSeed(input.seed, "battle"));
     this.triggerRng = new SeededRandom(
       deriveSeed(input.seed, "trigger-order")
@@ -153,6 +167,8 @@ class BattleSim {
 
   run(): BattleResult {
     this.log("battleStart", null, null, [], "Battle started.");
+    this.runPerkStartOfBattle();
+    this.runToyStartOfBattle();
     this.installTigerRepeats();
     this.runStartOfBattle();
     this.resolveDeaths();
@@ -160,6 +176,7 @@ class BattleSim {
     let round = 0;
     while (this.living("player").length > 0 && this.living("enemy").length > 0) {
       round++;
+      this.battleTurn = round;
       if (round > 200) {
         this.warn("Battle exceeded 200 attack rounds and was stopped.");
         break;
@@ -192,8 +209,140 @@ class BattleSim {
       outcome,
       events: this.events,
       playerSurvivors,
-      enemySurvivors
+      enemySurvivors,
+      ...(this.playerNextTurnGold
+        ? { playerNextTurnGold: this.playerNextTurnGold }
+        : {})
     };
+  }
+
+  private runToyStartOfBattle(): void {
+    if (!this.activeToy) return;
+    const levels: PetLevel[] = [this.activeToy.level];
+    for (const pet of this.living("player")) {
+      if (pet.name === "Puma") levels.push(pet.level);
+      if (pet.name === "Chameleon") levels.push(pet.level);
+    }
+    for (const level of levels) {
+      switch (this.activeToy.id) {
+        case "stick": {
+          const friends = this.living("player");
+          const target = friends[Math.floor(friends.length / 2)];
+          if (target) this.givePerk(target, "walnut", level);
+          break;
+        }
+        case "tennisBall":
+          for (const target of this.randomEnemies(
+            this.living("player")[0],
+            level
+          )) {
+            this.applyDamage(
+              target,
+              level,
+              this.living("player")[0],
+              "ability"
+            );
+          }
+          break;
+        case "plasticSaw": {
+          const targets = this.living("player").slice(0, level);
+          for (const target of targets) {
+            this.givePerk(target, "eucalyptus", level);
+          }
+          break;
+        }
+        case "foamSword":
+          for (let count = 0; count < level; count++) {
+            const target = this.lowestHealthEnemy(
+              this.living("player")[0]
+            );
+            if (target) {
+              this.applyDamage(
+                target,
+                6,
+                this.living("player")[0],
+                "ability"
+              );
+            }
+          }
+          break;
+        case "toyGun":
+          for (let count = 0; count < level; count++) {
+            const target = this.living("enemy").at(-1);
+            if (target) {
+              this.applyDamage(
+                target,
+                6,
+                this.living("player")[0],
+                "ability"
+              );
+            }
+          }
+          break;
+        case "toiletPaper": {
+          const targets = this.living("enemy").slice(0, level);
+          for (const target of targets) this.giveAilment(target, "weak");
+          break;
+        }
+        case "stinkySock": {
+          const targets = this.living("enemy")
+            .sort((a, b) => b.health - a.health || a.lastIndex - b.lastIndex)
+            .slice(0, level);
+          for (const target of targets) {
+            this.applyDamage(
+              target,
+              Math.floor(target.health * 0.4),
+              this.living("player")[0],
+              "ability"
+            );
+          }
+          break;
+        }
+        case "peanutJar": {
+          const targets = this.living("player").slice(-level);
+          for (const target of targets) this.givePerk(target, "peanut", level);
+          break;
+        }
+        case "airPalmTree": {
+          const targets = this.living("player").slice(-level);
+          for (const target of targets) this.givePerk(target, "coconut", level);
+          break;
+        }
+        default:
+          break;
+      }
+    }
+  }
+
+  private runPerkStartOfBattle(): void {
+    for (const pet of this.priority([
+      ...this.living("player"),
+      ...this.living("enemy")
+    ])) {
+      const pie = this.perk(pet, "pie");
+      if (pie) {
+        this.buff(
+          pet,
+          4 * pie.sourceLevel * this.perkScale(pet),
+          3 * pie.sourceLevel * this.perkScale(pet),
+          pet,
+          "Pie"
+        );
+      }
+      const pancakes = this.perk(pet, "pancakes");
+      if (pancakes) {
+        for (const friend of this.living(pet.side)) {
+          if (friend.uid === pet.uid) continue;
+          this.buff(
+            friend,
+            2 * pancakes.sourceLevel * this.perkScale(pet),
+            2 * pancakes.sourceLevel * this.perkScale(pet),
+            pet,
+            "Pancakes"
+          );
+        }
+      }
+    }
   }
 
   private installTigerRepeats(): void {
@@ -301,6 +450,45 @@ class BattleSim {
   }
 
   private notifyBeforeAttack(pet: BattlePet): void {
+    const egg = this.perk(pet, "egg");
+    if (egg) {
+      const target = this.living(this.opponent(pet.side))[0];
+      if (target) {
+        this.log(
+          "trigger",
+          pet.side,
+          pet,
+          [target.uid],
+          `${pet.name}'s Egg deals 2 damage before attacking.`
+        );
+        for (let count = 0; count < egg.sourceLevel; count++) {
+          this.applyDamage(
+            target,
+            2 * this.perkScale(pet),
+            pet,
+            "ability"
+          );
+        }
+      }
+      this.removePerk(pet, "egg");
+    }
+    const squash = this.perk(pet, "squash");
+    if (squash) {
+      const target = this.living(this.opponent(pet.side))[0];
+      if (target) {
+        const before = target.health;
+        target.health = Math.min(target.health, 6);
+        this.log(
+          "trigger",
+          pet.side,
+          pet,
+          [target.uid],
+          `${pet.name}'s Squash lowers ${target.name} to ${target.health} health.`,
+          { before, health: target.health }
+        );
+      }
+      this.removePerk(pet, "squash");
+    }
     for (const ability of this.abilities(pet)) {
       if (this.abilityText(ability).toLowerCase().includes("before attack")) {
         this.callAbility(pet, ability, "beforeAttack");
@@ -318,14 +506,15 @@ class BattleSim {
       const enemies = this.living(this.opponent(attacker.side));
       const second = enemies[1] ?? enemies[0];
       if (second) {
+        const damage = 5 * this.perkScale(attacker);
         this.log(
           "trigger",
           attacker.side,
           attacker,
           [second.uid],
-          `${attacker.name}'s Chili burns ${second.name} for 5.`
+          `${attacker.name}'s Chili burns ${second.name} for ${damage}.`
         );
-        this.applyDamage(second, 5, attacker, "ability");
+        this.applyDamage(second, damage, attacker, "ability");
       }
     }
 
@@ -340,6 +529,27 @@ class BattleSim {
       );
       this.markDying(target);
     }
+
+    for (const [perkId, damage, label] of [
+      ["skewer", 3 * this.perkScale(attacker), "Skewer"],
+      ["mildChili", 4 * this.perkScale(attacker), "Mild Chili"]
+    ] as const) {
+      if (!this.perk(attacker, perkId)) continue;
+      const enemies = this.living(this.opponent(attacker.side));
+      const indexes = perkId === "skewer" ? [1, 2] : [0];
+      for (const index of indexes) {
+        const target = enemies[index];
+        if (!target) continue;
+        this.log(
+          "trigger",
+          attacker.side,
+          attacker,
+          [target.uid],
+          `${attacker.name}'s ${label} deals ${damage} damage to ${target.name}.`
+        );
+        this.applyDamage(target, damage, attacker, "ability");
+      }
+    }
   }
 
   private consumeAttackPerks(pet: BattlePet): void {
@@ -348,12 +558,19 @@ class BattleSim {
       steak.uses--;
       if (steak.uses <= 0) this.removePerk(pet, "steak");
     }
+    const salt = this.perk(pet, "salt");
+    if (salt && salt.uses !== null) {
+      salt.uses--;
+      if (salt.uses <= 0) this.removePerk(pet, "salt");
+    }
   }
 
   private attackValue(pet: BattlePet): number {
     let attack = pet.attack;
-    if (this.perk(pet, "meatBone")) attack += 3;
-    if (this.perk(pet, "steak")) attack += 20;
+    const scale = this.perkScale(pet);
+    if (this.perk(pet, "meatBone")) attack += 3 * scale;
+    if (this.perk(pet, "steak")) attack += 20 * scale;
+    if (this.perk(pet, "salt")) attack *= 2;
     return Math.max(0, attack);
   }
 
@@ -391,11 +608,14 @@ class BattleSim {
   ): number {
     if (!alive(target) || rawDamage <= 0) return 0;
     let damage = Math.max(0, Math.floor(rawDamage));
+    if (target.ailment === "weak") {
+      damage += 3;
+    }
 
     const garlic = this.perk(target, "garlic");
     if (garlic) {
       const before = damage;
-      damage = Math.max(0, damage - 2);
+      damage = Math.max(0, damage - 2 * this.perkScale(target));
       this.log(
         "trigger",
         target.side,
@@ -406,9 +626,45 @@ class BattleSim {
       );
     }
 
+    const lime = this.perk(target, "lime");
+    if (lime) {
+      const before = damage;
+      damage = Math.max(0, damage - this.perkScale(target));
+      this.log(
+        "trigger",
+        target.side,
+        source,
+        [target.uid],
+        `${target.name}'s Lime reduces ${before} damage to ${damage}.`,
+        { before, damage }
+      );
+    }
+
+    const eucalyptus = this.perk(target, "eucalyptus");
+    if (eucalyptus && damage > 0) {
+      damage = Math.max(0, damage - 4 * this.perkScale(target));
+      const uses = (eucalyptus.uses ?? 1) - 1;
+      if (uses <= 0) {
+        this.removePerk(target, "eucalyptus");
+      } else {
+        eucalyptus.uses = uses;
+      }
+    }
+
+    const lemon = this.perk(target, "lemon");
+    if (lemon && damage > 0) {
+      damage = Math.max(0, damage - 7 * this.perkScale(target));
+      const uses = (lemon.uses ?? 2) - 1;
+      if (uses <= 0) {
+        this.removePerk(target, "lemon");
+      } else {
+        lemon.uses = uses;
+      }
+    }
+
     const melon = this.perk(target, "melon");
     if (melon && damage > 0) {
-      damage = Math.max(0, damage - 20);
+      damage = Math.max(0, damage - 20 * this.perkScale(target));
       this.removePerk(target, "melon");
       this.log(
         "perk",
@@ -429,6 +685,23 @@ class BattleSim {
         target,
         [],
         `${target.name}'s Coconut blocks the damage.`
+      );
+    }
+
+    const walnut = this.perk(target, "walnut");
+    if (walnut && damage > 0) {
+      damage = Math.max(
+        0,
+        damage -
+          2 * walnut.sourceLevel * this.perkScale(target)
+      );
+      this.removePerk(target, "walnut");
+      this.log(
+        "perk",
+        target.side,
+        target,
+        [],
+        `${target.name}'s Walnut is consumed.`
       );
     }
 
@@ -462,6 +735,7 @@ class BattleSim {
         this.markDying(target);
       }
     }
+    this.lastHitBy.set(target.uid, source);
     return damage;
   }
 
@@ -627,6 +901,407 @@ class BattleSim {
     const template = this.template(ability.templateId);
     const level = levelNumber(ability.level);
     switch (template.title) {
+      case "Beetle":
+        if (trigger === "startOfBattle") {
+          this.givePerk(pet, "walnut", level);
+        }
+        break;
+      case "Ladybug":
+        if (trigger === "friendGainedPerk") {
+          this.buff(pet, 2 * level, 0, pet, "Ladybug");
+        }
+        break;
+      case "Moth":
+        if (trigger === "startOfBattle") {
+          const target = this.living(pet.side).find(
+            (friend) => friend.uid !== pet.uid
+          );
+          if (target) {
+            this.buff(target, 2 * level, 0, pet, "Moth");
+          }
+        }
+        break;
+      case "Gecko":
+        if (trigger === "startOfBattle" && this.activeToy) {
+          this.buff(pet, 0, 2 * level, pet, "Gecko");
+        }
+        break;
+      case "Bat":
+        if (
+          trigger === "beforeAttack" &&
+          this.incrementTrigger(pet, "Bat") <= level
+        ) {
+          const target = this.randomEnemy(pet);
+          if (target) this.giveAilment(target, "weak");
+        }
+        break;
+      case "Beluga Sturgeon":
+        if (trigger === "faint") {
+          for (let count = 0; count < level; count++) {
+            const dolphin = tokenPet({
+              side: pet.side,
+              name: "Dolphin",
+              attack: 2,
+              health: 3,
+              tier: 2,
+              level: 1
+            });
+            dolphin.perks = [
+              { id: "rice", sourceLevel: 1, uses: null }
+            ];
+            this.summon(
+              pet.side,
+              dolphin,
+              this.boards[pet.side].length
+            );
+          }
+        }
+        break;
+      case "Bilby":
+        if (
+          trigger === "friendLostPerk" &&
+          context.source &&
+          context.source.uid !== pet.uid &&
+          this.incrementPerTurnTrigger(pet, "Bilby", level)
+        ) {
+          this.givePerk(context.source, "garlic", 1);
+        }
+        break;
+      case "Frigatebird":
+        if (
+          trigger === "friendGainedAilment" &&
+          context.source &&
+          context.source.uid !== pet.uid &&
+          this.incrementPerTurnTrigger(pet, "Frigatebird", level)
+        ) {
+          this.givePerk(context.source, "rice", 1);
+        }
+        break;
+      case "Robin":
+        if (trigger === "startOfBattle") {
+          const nest = tokenPet({
+            side: pet.side,
+            name: "Nest",
+            attack: 2 * level,
+            health: 3 * level,
+            tier: 2,
+            level
+          });
+          nest.perks = [
+            { id: "egg", sourceLevel: level, uses: 1 }
+          ];
+          this.summon(
+            pet.side,
+            nest,
+            this.boards[pet.side].length
+          );
+        }
+        break;
+      case "Tabby Cat":
+        if (trigger === "friendGainedPerk") {
+          for (const target of this.friendsBehind(pet, 2)) {
+            this.buff(target, 0, level, pet, "Tabby Cat");
+          }
+        }
+        break;
+      case "Hoopoe Bird":
+        if (trigger === "faint") {
+          const enemies = this.living(this.opponent(pet.side));
+          for (const target of [enemies[0], enemies.at(-1)]) {
+            if (target) {
+              this.applyDamage(target, 2 * level, pet, "ability");
+            }
+          }
+        }
+        break;
+      case "Microbe":
+        if (trigger === "faint") {
+          const range = 3 * level;
+          for (const side of ["player", "enemy"] as const) {
+            for (const target of this.living(side)) {
+              if (
+                target.uid !== pet.uid &&
+                (side !== pet.side ||
+                  Math.abs(target.lastIndex - pet.lastIndex) <= range)
+              ) {
+                this.giveAilment(target, "weak");
+              }
+            }
+          }
+        }
+        break;
+      case "Mole":
+        if (trigger === "faint") {
+          const candidates = this.living(pet.side)
+            .filter(
+              (friend) =>
+                friend.uid !== pet.uid && friend.perks.length > 0
+            )
+            .sort(
+              (a, b) =>
+                Math.abs(a.lastIndex - pet.lastIndex) -
+                  Math.abs(b.lastIndex - pet.lastIndex) ||
+                a.lastIndex - b.lastIndex
+            )
+            .slice(0, 2);
+          if (candidates.length === 2) {
+            for (const target of candidates) {
+              this.removePerk(target, target.perks[0].id);
+            }
+            this.summon(
+              pet.side,
+              tokenPet({
+                side: pet.side,
+                name: "Mole",
+                attack: 6 * level,
+                health: 6 * level,
+                tier: 3,
+                level
+              }),
+              pet.lastIndex
+            );
+          }
+        }
+        break;
+      case "Doberman":
+        if (trigger === "startOfBattle") {
+          this.buff(pet, 8 * level, 0, pet, "Doberman");
+          const friends = this.living(pet.side).filter(
+            (friend) => friend.uid !== pet.uid
+          );
+          if (
+            friends.length > 0 &&
+            friends.every(
+              (friend) =>
+                friend.tier > pet.tier ||
+                this.template(
+                  this.baseAbility(friend).templateId
+                ).tier > pet.tier
+            )
+          ) {
+            this.givePerk(pet, "coconut", 1);
+          }
+        }
+        break;
+      case "Caterpillar":
+        if (trigger === "startOfBattle" && level === 3) {
+          const strongest = this.living(this.opponent(pet.side)).sort(
+            (a, b) =>
+              b.attack + b.health - (a.attack + a.health) ||
+              a.lastIndex - b.lastIndex
+          )[0];
+          pet.name = "Butterfly";
+          pet.attack = Math.max(1, strongest?.attack ?? 1);
+          pet.health = Math.max(1, strongest?.health ?? 1);
+          this.log(
+            "trigger",
+            pet.side,
+            pet,
+            strongest ? [strongest.uid] : [],
+            `${pet.name} transforms into a Butterfly.`
+          );
+        }
+        break;
+      case "Whale Shark":
+        if (
+          trigger === "thisGainedPerk" ||
+          trigger === "thisGainedAilment"
+        ) {
+          pet.perks = [];
+          pet.ailment = null;
+          this.buff(
+            pet,
+            3 * level,
+            3 * level,
+            pet,
+            "Whale Shark"
+          );
+        }
+        break;
+      case "Axolotl":
+        if (
+          trigger === "friendGainedPerk" &&
+          context.source &&
+          this.incrementPerTurnTrigger(pet, "Axolotl", level * 3)
+        ) {
+          this.buff(
+            context.source,
+            level,
+            level,
+            pet,
+            "Axolotl"
+          );
+        }
+        break;
+      case "Eagle":
+        if (trigger === "faint") {
+          const nextTier = Math.min(6, pet.tier + 1);
+          const candidates = [...this.content.pets.values()].filter(
+            (candidate) => candidate.tier === nextTier
+          );
+          const chosen = this.rng.pick(candidates);
+          if (chosen) {
+            this.summon(
+              pet.side,
+              tokenPet({
+                side: pet.side,
+                name: chosen.title,
+                attack: 5 * level,
+                health: 5 * level,
+                tier: chosen.tier,
+                level,
+                templateId: chosen.id
+              }),
+              pet.lastIndex
+            );
+          }
+        }
+        break;
+      case "Raccoon":
+        if (
+          trigger === "beforeAttack" &&
+          this.incrementTrigger(pet, "Raccoon") <= 1
+        ) {
+          const target = this.living(this.opponent(pet.side))[0];
+          if (target) {
+            const stolen = target.perks.shift();
+            if (stolen) {
+              pet.perks = [{ ...stolen }];
+              this.log(
+                "perk",
+                pet.side,
+                pet,
+                [target.uid],
+                `${pet.name} steals ${stolen.id} from ${target.name}.`
+              );
+            }
+          }
+        }
+        break;
+      case "Snapping Turtle":
+        if (trigger === "faint") {
+          for (const target of this.friendsBehind(pet, level)) {
+            this.givePerk(target, "skewer", level);
+          }
+        }
+        break;
+      case "Stonefish":
+        if (trigger === "faint") {
+          const killer = this.lastHitBy.get(pet.uid);
+          if (killer && alive(killer)) {
+            this.applyDamage(
+              killer,
+              pet.attack * level,
+              pet,
+              "ability"
+            );
+          }
+        }
+        break;
+      case "Lionfish":
+        if (trigger === "faint") {
+          const repeats = 1 + Math.floor(pet.attack / 10);
+          for (let count = 0; count < repeats; count++) {
+            const target = this.randomEnemy(pet);
+            if (target) {
+              this.applyDamage(target, 3 * level, pet, "ability");
+            }
+          }
+        }
+        break;
+      case "Mantis Shrimp":
+        if (trigger === "startOfBattle") {
+          for (let count = 0; count < level; count++) {
+            const target = this.living(this.opponent(pet.side))[0];
+            if (target) this.applyDamage(target, 10, pet, "ability");
+          }
+        }
+        break;
+      case "Octopus":
+        if (trigger === "afterAttack") {
+          for (const target of this.randomEnemies(pet, level)) {
+            this.applyDamage(target, 6, pet, "ability");
+          }
+        }
+        break;
+      case "Pangolin":
+        if (trigger === "faint" && this.activeToy) {
+          const target = this.nearestFriendBehind(pet);
+          if (target) this.buff(target, 0, 4 * level, pet, "Pangolin");
+        }
+        break;
+      case "Tahr":
+        if (trigger === "faint") {
+          for (const target of this.friendsBehind(pet, level)) {
+            this.givePerk(target, "mildChili", level);
+          }
+        }
+        break;
+      case "Toucan":
+        if (
+          trigger === "beforeAttack" &&
+          this.incrementTrigger(pet, "Toucan") <= 1
+        ) {
+          const copied = pet.perks[0] ?? null;
+          if (copied) {
+            for (const target of this.friendsBehind(pet, level)) {
+              target.perks = [{ ...copied }];
+              target.ailment = null;
+              this.log(
+                "perk",
+                pet.side,
+                pet,
+                [target.uid],
+                `${pet.name} copies ${copied.id} to ${target.name}.`
+              );
+            }
+          }
+        }
+        break;
+      case "Elephant Seal":
+        if (
+          trigger === "thisGainedPerk" &&
+          this.incrementPerTurnTrigger(pet, "Elephant Seal", 1)
+        ) {
+          const targets = this.rng.sample(
+            this.living(pet.side).filter(
+              (friend) => friend.uid !== pet.uid
+            ),
+            3
+          );
+          for (const target of targets) {
+            this.buff(
+              target,
+              4 * level,
+              4 * level,
+              pet,
+              "Elephant Seal"
+            );
+          }
+        }
+        break;
+      case "Purple Frog":
+        if (trigger === "friendSummoned" && context.summoned) {
+          this.incrementPerTurnTrigger(pet, "Purple Frog", level);
+        }
+        break;
+      case "Sauropod":
+        if (
+          trigger === "friendGainedPerk" &&
+          this.incrementPerTurnTrigger(pet, "Sauropod", level * 3)
+        ) {
+          if (pet.side === "player") {
+            this.playerNextTurnGold += level;
+            this.log(
+              "trigger",
+              pet.side,
+              pet,
+              [],
+              `${pet.name} will grant ${level} gold next turn.`
+            );
+          }
+        }
+        break;
       case "Ant":
         if (trigger === "faint") {
           const target = this.randomFriend(pet);
@@ -1109,6 +1784,34 @@ class BattleSim {
       case "Squirrel":
       case "Cow":
       case "Cat":
+      case "Bluebird":
+      case "Chinchilla":
+      case "Ferret":
+      case "Gold Fish":
+      case "Lemur":
+      case "Mandrill":
+      case "Shrimp":
+      case "Flying Squirrel":
+      case "Gharial":
+      case "Hatching Chick":
+      case "Owl":
+      case "Tropical Fish":
+      case "Buffalo":
+      case "Caterpillar":
+      case "Chameleon":
+      case "Llama":
+      case "Lobster":
+      case "Puppy":
+      case "Chicken":
+      case "Goat":
+      case "Mosasaurus":
+      case "Panther":
+      case "Sting Ray":
+      case "Anglerfish":
+      case "Mongoose":
+      case "Puma":
+      case "Tyrannosaurus":
+      case "Dromedary":
         break;
       default:
         this.warn(`No battle handler for ${template.title}.`);
@@ -1212,13 +1915,26 @@ class BattleSim {
   }
 
   private givePerk(target: BattlePet, perkId: PerkId, level: PetLevel): void {
+    const uses =
+      perkId === "coconut" || perkId === "walnut"
+        ? 1
+        : perkId === "egg" ||
+            perkId === "squash" ||
+            perkId === "salt"
+          ? 1
+          : perkId === "lemon"
+            ? 2
+            : perkId === "eucalyptus"
+              ? 1
+              : null;
     target.perks = [
       {
         id: perkId,
         sourceLevel: level,
-        uses: perkId === "coconut" ? 1 : null
+        uses
       } satisfies PerkState
     ];
+    target.ailment = null;
     this.log(
       "perk",
       target.side,
@@ -1226,20 +1942,105 @@ class BattleSim {
       [target.uid],
       `${target.name} gains ${perkId}.`
     );
+    this.notifyGainedEquipment(target, "perk");
+  }
+
+  private giveAilment(
+    target: BattlePet,
+    ailment: NonNullable<BattlePet["ailment"]>
+  ): void {
+    target.perks = [];
+    target.ailment = ailment;
+    this.log(
+      "perk",
+      target.side,
+      target,
+      [target.uid],
+      `${target.name} gains ${ailment}.`
+    );
+    this.notifyGainedEquipment(target, "ailment");
+  }
+
+  private notifyGainedEquipment(
+    target: BattlePet,
+    kind: "perk" | "ailment"
+  ): void {
+    const phrase =
+      kind === "perk" ? "friendly gained perk" : "friendly gained ailment";
+    for (const friend of this.priority(this.living(target.side))) {
+      for (const ability of this.abilities(friend)) {
+        const text = this.abilityText(ability).toLowerCase();
+        if (text.includes(phrase)) {
+          this.callAbility(
+            friend,
+            ability,
+            kind === "perk" ? "friendGainedPerk" : "friendGainedAilment",
+            { source: target }
+          );
+        }
+      }
+    }
+    for (const ability of this.abilities(target)) {
+      const text = this.abilityText(ability).toLowerCase();
+      if (
+        kind === "perk" &&
+        (text.includes("gain perk or ailment") ||
+          text.includes("gain perk:"))
+      ) {
+        this.callAbility(target, ability, "thisGainedPerk");
+      }
+      if (kind === "ailment" && text.includes("gain perk or ailment")) {
+        this.callAbility(target, ability, "thisGainedAilment");
+      }
+    }
   }
 
   private perk(target: BattlePet, id: PerkId): PerkState | undefined {
     return target.perks.find((perk) => perk.id === id);
   }
 
+  private perkScale(pet: BattlePet): number {
+    return pet.name === "Panther" ? 2 : 1;
+  }
+
   private removePerk(target: BattlePet, id: PerkId): void {
+    const hadPerk = target.perks.some((perk) => perk.id === id);
     target.perks = target.perks.filter((perk) => perk.id !== id);
+    if (hadPerk) this.notifyFriendLostPerk(target);
   }
 
   private incrementTrigger(pet: BattlePet, key: string): number {
     const next = (pet.triggeredThisBattle[key] ?? 0) + 1;
     pet.triggeredThisBattle[key] = next;
     return next;
+  }
+
+  private incrementPerTurnTrigger(
+    pet: BattlePet,
+    key: string,
+    limit: number
+  ): boolean {
+    const scoped = `${key}:turn:${this.battleTurn}`;
+    const next = (pet.triggeredThisBattle[scoped] ?? 0) + 1;
+    pet.triggeredThisBattle[scoped] = next;
+    return next <= limit;
+  }
+
+  private notifyFriendLostPerk(target: BattlePet): void {
+    for (const friend of this.priority(this.living(target.side))) {
+      if (friend.uid === target.uid) continue;
+      for (const ability of this.abilities(friend)) {
+        if (
+          this.abilityText(ability)
+            .toLowerCase()
+            .includes("friend lost perk")
+        ) {
+          this.callAbility(friend, ability, "friendLostPerk", {
+            source: target
+          });
+        }
+      }
+    }
   }
 
   private summon(
@@ -1468,6 +2269,7 @@ class BattleSim {
       position: pet.lastIndex + 1,
       status,
       perks: pet.perks.map((perk) => perk.id),
+      ailment: pet.ailment,
       swallowedBy
     };
   }

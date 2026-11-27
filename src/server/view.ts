@@ -5,11 +5,13 @@ import {
   PERK_DESCRIPTION_ZH,
   petAbilityZh,
   petNameZh,
-  perkNameZh
+  perkNameZh,
+  toyNameZh
 } from "../game/localization.js";
 import { sellValueForPet } from "../game/run.js";
 import type {
   ContentBundle,
+  AilmentId,
   BattleEvent,
   BattleStateSnapshot,
   FoodTemplate,
@@ -38,7 +40,19 @@ const SINGLE_TARGET_FOODS = new Set([
   "bread-crumbs",
   "milk",
   "coconut",
-  "peanut"
+  "peanut",
+  "egg",
+  "lime",
+  "rice",
+  "squash",
+  "blackberry",
+  "croissant",
+  "pie",
+  "salt",
+  "lasagna",
+  "lemon",
+  "pancakes",
+  "skewer"
 ]);
 
 const RANDOM_TARGET_FOODS = new Set([
@@ -89,7 +103,25 @@ export interface WebView {
     recentLog: string[];
     lastBattleOutcome: RunState["lastBattleOutcome"];
     lastBattleReplay: BattleReplayView | null;
+    activeToy: {
+      id: string;
+      nameZh: string;
+      level: PetLevel;
+      remainingTurns: number;
+    } | null;
+    pendingChoices: ChoiceView[];
   };
+}
+
+export interface ChoiceView {
+  kind: "toy" | "opponentPet";
+  sourceUid: string;
+  sourceNameZh: string;
+  options: Array<{
+    id: string;
+    name: string;
+    nameZh: string;
+  }>;
 }
 
 export interface BattleReplayPetView {
@@ -100,6 +132,7 @@ export interface BattleReplayPetView {
   level: PetLevel;
   attack: number;
   health: number;
+  ailment: AilmentId | null;
   ability: string;
   perks: PerkView[];
 }
@@ -140,6 +173,7 @@ export interface BattleReplayView {
         Omit<BattleStateSnapshot["units"][number], "perks"> & {
           nameZh: string;
           perks: PerkView[];
+          ailment: AilmentId | null;
         }
       >;
     };
@@ -160,6 +194,7 @@ export interface PetView {
   levelXpRequired: number | null;
   attack: number;
   health: number;
+  ailment: AilmentId | null;
   battleAttackBonus: number;
   battleHealthBonus: number;
   ability: string;
@@ -304,6 +339,7 @@ function petView(
     levelXpRequired: pet.level === 1 ? 2 : pet.level === 2 ? 3 : null,
     attack: pet.attack,
     health: pet.health,
+    ailment: pet.ailment ?? null,
     battleAttackBonus: pet.battleStats.attack,
     battleHealthBonus: pet.battleStats.health,
     ability,
@@ -326,6 +362,7 @@ function battleReplayPetView(
     level: pet.level,
     attack: pet.attack,
     health: pet.health,
+    ailment: pet.ailment ?? null,
     ability: petAbilityZh(
       pet.name,
       pet.level,
@@ -402,6 +439,7 @@ function summonReplayPetView(
     level: level as PetLevel,
     attack: typeof values.attack === "number" ? values.attack : 1,
     health: typeof values.health === "number" ? values.health : 1,
+    ailment: null,
     ability: template
       ? petAbilityZh(
           template.title,
@@ -429,9 +467,15 @@ function shopPetView(
     nameZh: petNameZh(template.title),
     tier: template.tier,
     attack:
-      template.baseAttack + state.shopPetBuff.attack + offer.attackBonus,
+      template.baseAttack +
+      state.shopPetBuff.attack +
+      (state.shopPetTurnBuff?.attack ?? 0) +
+      offer.attackBonus,
     health:
-      template.baseHealth + state.shopPetBuff.health + offer.healthBonus,
+      template.baseHealth +
+      state.shopPetBuff.health +
+      (state.shopPetTurnBuff?.health ?? 0) +
+      offer.healthBonus,
     cost: offer.cost,
     frozen: offer.frozen,
     ability: petAbilityZh(
@@ -553,9 +597,15 @@ function rewardGroupsView(
       nameZh: petNameZh(template.title),
       tier: template.tier,
       attack:
-        template.baseAttack + state.shopPetBuff.attack + offer.attackBonus,
+        template.baseAttack +
+        state.shopPetBuff.attack +
+        (state.shopPetTurnBuff?.attack ?? 0) +
+        offer.attackBonus,
       health:
-        template.baseHealth + state.shopPetBuff.health + offer.healthBonus,
+        template.baseHealth +
+        state.shopPetBuff.health +
+        (state.shopPetTurnBuff?.health ?? 0) +
+        offer.healthBonus,
       cost: offer.cost,
       ability: petAbilityZh(template.title, 1, template.abilities[0]),
       duplicateUids: state.team
@@ -618,7 +668,35 @@ export function buildWebView(
       foodGlossary: foodGlossary(content),
       recentLog: state.log.slice(-120).map(battleLogLineZh),
       lastBattleOutcome: state.lastBattleOutcome,
-      lastBattleReplay: battleReplayView(state, content)
+      lastBattleReplay: battleReplayView(state, content),
+      activeToy: state.activeToy
+        ? {
+            id: state.activeToy.id,
+            nameZh: toyNameZh(state.activeToy.id),
+            level: state.activeToy.level,
+            remainingTurns: state.activeToy.remainingTurns
+          }
+        : null,
+      pendingChoices: (state.pendingChoices ?? []).map((choice) => {
+        const source = state.team.find(
+          (pet) => pet.uid === choice.sourceUid
+        );
+        return {
+          kind: choice.kind,
+          sourceUid: choice.sourceUid,
+          sourceNameZh: source ? petNameZh(source.name) : "Toy",
+          options: choice.options.map((option) => {
+            const template = content.pets.get(option);
+            return {
+              id: option,
+              name: template?.title ?? toyNameZh(option),
+              nameZh: template
+                ? petNameZh(template.title)
+                : toyNameZh(option)
+            };
+          })
+        };
+      })
     }
   };
 }
