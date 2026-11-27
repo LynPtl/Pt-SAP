@@ -74,7 +74,7 @@
 | Versus/With Friends | 未实现 | — | — | 不在当前范围 |
 | 成就/收藏/红丝带持久化 | 展示层部分 | A | 胜利结算 | 没有账户级收藏 |
 | 结算最终阵容 | 已展示完整只读队伍卡 | A | `renderFinalPetCard` | 无 |
-| 全部 180 个技能等级 | 有执行入口 | — | `battle.ts` / `run.ts` | 未逐条差分验证 |
+| 已开放 Pack 的全部技能等级 | Turtle 有执行入口 | — | `battle.ts` / `run.ts` | 未逐条差分验证 |
 | 六 Pack 数据加载 | 已接入 | A | `content.ts` / `packs.ts` | 非 Turtle 内容仍需固定版本 |
 | Pack 内容版本隔离 | 已接入 | A | `RunState.contentVersion` | 首次开放前生成并冻结 |
 | Pack Ghost 隔离 | 已接入 | A | `selectGhost` / PostgreSQL | 按 Pack 和内容版本双过滤 |
@@ -112,7 +112,7 @@
 
 - 目标版本固定并记录内容哈希。
 - 每个可见机制都有来源和测试 ID。
-- 180 个技能等级至少各有一条 fixture；复杂技能有多条组合 fixture。
+- 每个开放 Pack 的技能等级至少各有一条 fixture；复杂技能有多条组合 fixture。
 - 同种子差分回放逐事件一致。
 - 商店、战斗、Ghost 和升级奖励不存在仅靠人工描述的近似。
 - 外部实机 Oracle 结果全部通过。

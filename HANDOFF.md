@@ -105,7 +105,7 @@ wiki.gg MediaWiki API
   -> reference/raw/turtle-pack-pages.json
   -> reference/normalized/turtle-pack.json
   -> reference/normalized/turtle-pack-foods.json
-  -> reports/turtle-pack-coverage.md
+  -> reports/<pack>-coverage.md
 ```
 
 关键点：
@@ -199,13 +199,13 @@ Pack 的 `reports/<slug>-coverage.md`。
 ### 7.2 食物
 
 - 食物用 `analyzeFood`，强制 `trigger: "passive"`；不要改回 `analyzeAbility`，否则 Honey/Mushroom 的 `Faint →` 会被误判成触发
-- 食物的 `tier` 当前是 `null`，因为 tier 在表格的章节标题里，没解析；需要的话再解析 `=== Tier N ===` 标题
+- 食物 tier 从 `Foods` 页的 `|-|Tier N =` 分区解析；token-only 食物保持 `null`
 - Honey 同时有 `perk` 和 `summon` 效果，这是预期的
 
 ### 7.3 数据完整性
 
 - Wiki 是社区维护，可能滞后；页面正文写 450 只，但 `Category:Pets` 有 535 个页面
-- 当前只处理 Turtle Pack；其他包需要复用 `parsePet` / `parseFoods`
+- 六个静态 Pack 共用 `parsePet` / `parseFoods`；同名的 Wiki 重复页按标题去重
 - `reference/` 和 `reports/` 里都有 SAP 名称/英文文本；`reference/` 已 gitignore，`reports/` 是私有仓库内容。**仓库公开前必须清理报告中的 SAP 文本。**
 
 ## 8. 已确定的设计约束
@@ -296,16 +296,17 @@ src/engine/
 
 ### 后续：扩展卡包
 
-Turtle Pack 跑通后，再抓其他包。不要一上来实现 535 只。
+六个静态 Pack 已完成抓取和内容隔离。按 Puppy → Star → Golden → Unicorn
+→ Danger 顺序补执行器；禁止把只有文本、没有技能执行的 Pack 对外开放。
 
 ## 10. 给接手 agent 的操作规则
 
-- 先读：`README.md`、`reports/turtle-pack-coverage.md`、`src/scraper/normalize.ts`、`src/scraper/coverage.ts`
+- 先读：`README.md`、`reports/<pack>-coverage.md`、`src/scraper/normalize.ts`、`src/scraper/coverage.ts`
 - **不要手改 `reference/`**；需要更新就重新跑 `npm run coverage -- --refresh`
 - 改分类器后必须重跑 `npm test` 和 `npm run report`
 - 不要把 `reference/` 的内容复制进 `data/` 或公开仓库
 - 不要接入 ptnook
-- 不要先做 535 只宠物；先 Turtle Pack 60 只
+- 不要一次打开未验证的 Pack；逐 Pack 完成执行器覆盖和 fixture 后再启用
 - 不要加入装备合成、海克斯、8 人实时
 - 不要改已确定的经济/队伍/胜负规则；要改先问
 - 共享工作区时不要 `git add -A`；用项目的选择性提交工具
@@ -334,8 +335,8 @@ docker compose run --rm pt-sap
 
 预期：
 
-- 80 个测试通过
-- 60 只宠物、21 个 Turtle Pack 食物
+- 当前全部测试通过
+- 六个 Pack 数据均可加载，Turtle 仍保持 60 只宠物和 21 种 Pack 食物
 - 游戏内容另含 Cow 的 Chocolate Milk 生成食物，共 22 个食物定义
 - 59 full / 1 partial / 0 custom
-- 报告生成到 `reports/turtle-pack-coverage.md`
+- 六份报告分别生成到 `reports/<slug>-coverage.md`
