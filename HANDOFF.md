@@ -26,7 +26,7 @@ Ghost 池、中文 Web UI 和战斗时间轴回放已接入；当前 77 个测�
 - 路径：`d:/pt-sap`
 - 分支：`main`
 - 工作区：商店/生成物/Ghost 增强批次准备提交
-- 最近已推送提交：`4f5d6ad`（本批完成后更新）
+- 最近已推送提交：`240dafb`
 - 环境：Windows，Node `v24.20.0`，npm `11.19.0`
 - 运行时依赖：`zod`、`pg`
 - 开发依赖：`typescript`、`tsx`、`@types/node`、`@types/pg`
