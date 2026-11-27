@@ -79,6 +79,36 @@ function addLog(state: RunState, message: string): void {
   if (state.log.length > 300) state.log.splice(0, state.log.length - 300);
 }
 
+function orderShopTriggers<T>(
+  state: RunState,
+  values: T[],
+  owner: (value: T) => PetInstance,
+  purpose: string
+): T[] {
+  const sorted = [...values].sort(
+    (a, b) => owner(b).attack - owner(a).attack
+  );
+  const rng = new SeededRandom(
+    deriveSeed(state.seed, "shop-trigger-order", state.turn, purpose)
+  );
+  const result: T[] = [];
+  for (let start = 0; start < sorted.length; ) {
+    let end = start + 1;
+    const attack = owner(sorted[start]).attack;
+    while (end < sorted.length && owner(sorted[end]).attack === attack) {
+      end++;
+    }
+    const tied = sorted.slice(start, end);
+    for (let index = tied.length - 1; index > 0; index--) {
+      const swap = rng.integer(0, index);
+      [tied[index], tied[swap]] = [tied[swap], tied[index]];
+    }
+    result.push(...tied);
+    start = end;
+  }
+  return result;
+}
+
 function petById(state: RunState, uid: string): PetInstance | null {
   return state.team.find((pet) => pet.uid === uid) ?? null;
 }
@@ -692,10 +722,11 @@ function triggerFoodEaten(
   state: RunState,
   target: PetInstance
 ): void {
-  const ordered = [...state.team].sort(
-    (a, b) =>
-      b.attack - a.attack ||
-      state.team.indexOf(a) - state.team.indexOf(b)
+  const ordered = orderShopTriggers(
+    state,
+    [...state.team],
+    (pet) => pet,
+    "food-eaten"
   );
   for (const rabbit of ordered.filter((pet) => pet.name === "Rabbit")) {
     const uses = rabbit.triggerCounters.rabbitUses ?? 0;
@@ -1036,10 +1067,11 @@ export function buyFood(
 
 function runEndTurnAbilities(state: RunState): void {
   let bisonTriggered = false;
-  const ordered = [...state.team].sort(
-    (a, b) =>
-      b.attack - a.attack ||
-      state.team.indexOf(a) - state.team.indexOf(b)
+  const ordered = orderShopTriggers(
+    state,
+    [...state.team],
+    (pet) => pet,
+    "end-turn"
   );
   for (const pet of ordered) {
     const index = state.team.findIndex((entry) => entry.uid === pet.uid);
@@ -1085,10 +1117,11 @@ function runStartTurnAbilities(
   state: RunState,
   content: ContentBundle
 ): void {
-  const ordered = [...state.team].sort(
-    (a, b) =>
-      b.attack - a.attack ||
-      state.team.indexOf(a) - state.team.indexOf(b)
+  const ordered = orderShopTriggers(
+    state,
+    [...state.team],
+    (pet) => pet,
+    "start-turn"
   );
   for (const pet of ordered) {
     const index = state.team.findIndex((entry) => entry.uid === pet.uid);

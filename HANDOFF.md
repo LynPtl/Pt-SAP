@@ -16,7 +16,7 @@
 
 **当前状态：已转为私有 SAP Normal 严格玩法副本。战斗引擎、分档商店、
 合并升级、食物、本机幽灵队、中文 Web UI 和战斗时间轴回放已完成首版，
-47 个测试通过。商店容量已按 3/3/4/4/5/5 宠物槽与
+49 个测试通过。商店容量已按 3/3/4/4/5/5 宠物槽与
 1/1/2/2/2/2 普通食物槽修正，并保留 2 个生成食物槽。下一阶段是更多
 真实对局 parity 用例和联机服务层/PostgreSQL。**
 
@@ -83,6 +83,7 @@ pt-sap/
   README.md
   LICENSE            # MIT
   SPEC.md            # 严格 SAP Normal 玩法规格
+  CONFORMANCE.md     # 逐机制一致性矩阵和剩余缺口
   DEPLOYMENT.md      # Linux/Docker/未来联机拓扑
   Dockerfile
   compose.yaml
@@ -316,7 +317,7 @@ docker compose run --rm pt-sap
 
 预期：
 
-- 47 个测试通过
+- 49 个测试通过
 - 60 只宠物、21 个 Turtle Pack 食物
 - 59 full / 1 partial / 0 custom
 - 报告生成到 `reports/turtle-pack-coverage.md`

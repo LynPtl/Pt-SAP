@@ -15,7 +15,8 @@
 - 60 只宠物、21 种食物、Perk 和主要战斗日志的中文展示。
 
 玩法与验收规则见 [SPEC.md](SPEC.md)，服务器和数据库规划见
-[DEPLOYMENT.md](DEPLOYMENT.md)。
+[DEPLOYMENT.md](DEPLOYMENT.md)，逐机制一致性状态见
+[CONFORMANCE.md](CONFORMANCE.md)。
 
 ## Requirements
 

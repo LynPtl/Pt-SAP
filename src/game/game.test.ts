@@ -210,6 +210,25 @@ test("simultaneous attacks emit explicit player and enemy attack events", () => 
   );
 });
 
+test("equal-attack trigger ties use seeded order instead of fixed player priority", () => {
+  const firstDamageSides = new Set<string | null>();
+  for (let seed = 0; seed < 24; seed++) {
+    const result = resolveBattle(
+      {
+        playerTeam: [pet("Mosquito", `p-${seed}`)],
+        enemyTeam: [pet("Mosquito", `e-${seed}`)],
+        seed: `trigger-tie-${seed}`
+      },
+      content
+    );
+    firstDamageSides.add(
+      result.events.find((event) => event.type === "damage")?.side ?? null
+    );
+  }
+  assert.ok(firstDamageSides.has("player"));
+  assert.ok(firstDamageSides.has("enemy"));
+});
+
 test("merging duplicate pets grants experience and stats", () => {
   const state = createRun("merge-test", content);
   const template = content.petsByTitle.get("Ant");
@@ -735,4 +754,29 @@ test("after-attack abilities still execute on a simultaneously fainting attacker
         event.message.startsWith("Pig takes 1 ability damage")
     )
   );
+});
+
+test("Tiger can make Whale capture multiple friends in FIFO order", () => {
+  const result = resolveBattle(
+    {
+      playerTeam: [
+        pet("Ant", "whale-food-ant"),
+        pet("Cricket", "whale-food-cricket"),
+        pet("Whale", "whale"),
+        pet("Tiger", "tiger")
+      ],
+      enemyTeam: [customPet("Pig", "whale-enemy", 1, 50)],
+      seed: "whale-multi-capture"
+    },
+    content
+  );
+  const swallowedCounts = result.events.map(
+    (event) =>
+      event.state.units.filter((unit) => unit.status === "swallowed").length
+  );
+  assert.ok(Math.max(...swallowedCounts) >= 2);
+  const swallowMessages = result.events
+    .map((event) => event.message)
+    .filter((message) => message.includes("swallows"));
+  assert.equal(swallowMessages.length, 2);
 });

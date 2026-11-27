@@ -136,7 +136,7 @@ export interface BattlePet {
   }>;
   triggeredThisBattle: Record<string, number>;
   canTriggerSummonAbilities: boolean;
-  swallowed: BattlePet | null;
+  swallowed: BattlePet[];
   isToken: boolean;
   lastIndex: number;
 }

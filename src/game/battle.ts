@@ -76,7 +76,7 @@ function clonePet(pet: PetInstance, side: BattleSide): BattlePet {
     extraAbilities: [],
     triggeredThisBattle: {},
     canTriggerSummonAbilities: true,
-    swallowed: null,
+    swallowed: [],
     isToken: false,
     lastIndex: -1
   };
@@ -108,7 +108,7 @@ function tokenPet(options: {
     triggeredThisBattle: {},
     canTriggerSummonAbilities:
       options.canTriggerSummonAbilities ?? false,
-    swallowed: null,
+    swallowed: [],
     isToken: true,
     lastIndex: -1
   };
@@ -117,6 +117,7 @@ function tokenPet(options: {
 class BattleSim {
   private readonly content: ContentBundle;
   private readonly rng: SeededRandom;
+  private readonly triggerRng: SeededRandom;
   private readonly boards: Record<BattleSide, BattlePet[]>;
   private readonly events: BattleEvent[] = [];
   private readonly dying = new Map<string, BattlePet>();
@@ -136,6 +137,9 @@ class BattleSim {
   ) {
     this.content = content;
     this.rng = new SeededRandom(deriveSeed(input.seed, "battle"));
+    this.triggerRng = new SeededRandom(
+      deriveSeed(input.seed, "trigger-order")
+    );
     this.boards = {
       player: input.playerTeam.slice(0, MAX_TEAM_SIZE).map((pet) =>
         clonePet(pet, "player")
@@ -226,14 +230,9 @@ class BattleSim {
         ].toLowerCase().includes("start of battle")
       )
     );
-    candidates.sort(
-      (a, b) =>
-        b.attack - a.attack ||
-        a.lastIndex - b.lastIndex ||
-        (a.side === "player" ? -1 : 1)
-    );
+    const orderedCandidates = this.priority(candidates);
 
-    for (const pet of candidates) {
+    for (const pet of orderedCandidates) {
       for (const ability of this.abilities(pet)) {
         if (this.abilityText(ability).toLowerCase().includes("start of battle")) {
           this.callAbility(pet, ability, "startOfBattle");
@@ -247,11 +246,7 @@ class BattleSim {
     const enemyFront = this.living("enemy")[0];
     if (!playerFront || !enemyFront) return;
 
-    const attackOrder = [playerFront, enemyFront].sort(
-      (a, b) =>
-        b.attack - a.attack ||
-        (a.side === "player" ? -1 : 1)
-    );
+    const attackOrder = this.priority([playerFront, enemyFront]);
     for (const pet of attackOrder) this.notifyBeforeAttack(pet);
     if (!alive(playerFront) || !alive(enemyFront)) {
       this.resolveDeaths();
@@ -473,13 +468,11 @@ class BattleSim {
     try {
       while (this.pendingHurts.length > 0) {
         const batch = this.pendingHurts.splice(0);
-        batch.sort(
-          (a, b) =>
-            b.target.attack - a.target.attack ||
-            a.target.lastIndex - b.target.lastIndex ||
-            (a.target.side === "player" ? -1 : 1)
+        const orderedBatch = this.orderByOwnerAttack(
+          batch,
+          (entry) => entry.target
         );
-        for (const { target, source } of batch) {
+        for (const { target, source } of orderedBatch) {
           if (!alive(target)) continue;
           this.notifyHurt(target, source);
           this.notifyFriendHurt(target);
@@ -524,14 +517,9 @@ class BattleSim {
       }
       const entries = [...this.dying.values()];
       this.dying.clear();
-      entries.sort(
-        (a, b) =>
-          b.attack - a.attack ||
-          a.lastIndex - b.lastIndex ||
-          (a.side === "player" ? -1 : 1)
-      );
+      const orderedEntries = this.priority(entries);
       const removed: BattlePet[] = [];
-      for (const pet of entries) {
+      for (const pet of orderedEntries) {
         if (pet.health > 0) continue;
         const board = this.boards[pet.side];
         const index = board.findIndex((entry) => entry.uid === pet.uid);
@@ -574,9 +562,9 @@ class BattleSim {
       );
     }
 
-    if (pet.swallowed) {
-      const swallowed = pet.swallowed;
-      pet.swallowed = null;
+    while (pet.swallowed.length > 0) {
+      const swallowed = pet.swallowed.shift();
+      if (!swallowed) break;
       this.summon(pet.side, swallowed, pet.lastIndex);
     }
 
@@ -879,15 +867,15 @@ class BattleSim {
       case "Whale":
         if (trigger === "startOfBattle") {
           const target = this.nearestFriendAhead(pet);
-          if (target && !pet.swallowed) {
+          if (target) {
             const index = this.indexOf(pet);
             const targetIndex = this.boards[pet.side].findIndex(
               (entry) => entry.uid === target.uid
             );
             if (targetIndex >= 0 && index >= 0) {
-              target.level = pet.level;
+              target.level = level;
               this.boards[pet.side].splice(targetIndex, 1);
-              pet.swallowed = target;
+              pet.swallowed.push(target);
               this.syncIndexes();
               this.log(
                 "trigger",
@@ -1337,12 +1325,32 @@ class BattleSim {
   }
 
   private priority(pets: BattlePet[]): BattlePet[] {
-    return [...pets].sort(
-      (a, b) =>
-        b.attack - a.attack ||
-        a.lastIndex - b.lastIndex ||
-        (a.side === "player" ? -1 : 1)
+    return this.orderByOwnerAttack(pets, (pet) => pet);
+  }
+
+  private orderByOwnerAttack<T>(
+    values: T[],
+    owner: (value: T) => BattlePet
+  ): T[] {
+    const sorted = [...values].sort(
+      (a, b) => owner(b).attack - owner(a).attack
     );
+    const result: T[] = [];
+    for (let start = 0; start < sorted.length; ) {
+      let end = start + 1;
+      const attack = owner(sorted[start]).attack;
+      while (end < sorted.length && owner(sorted[end]).attack === attack) {
+        end++;
+      }
+      const tied = sorted.slice(start, end);
+      for (let index = tied.length - 1; index > 0; index--) {
+        const swap = this.triggerRng.integer(0, index);
+        [tied[index], tied[swap]] = [tied[swap], tied[index]];
+      }
+      result.push(...tied);
+      start = end;
+    }
+    return result;
   }
 
   private opponent(side: BattleSide): BattleSide {
@@ -1406,14 +1414,14 @@ class BattleSim {
       ...this.boards.enemy.map((pet) => this.snapshotUnit(pet, "active", null)),
       ...this.fallen.map((pet) => this.snapshotUnit(pet, "fainted", null)),
       ...this.boards.player.flatMap((owner) =>
-        owner.swallowed
-          ? [this.snapshotUnit(owner.swallowed, "swallowed", owner.uid)]
-          : []
+        owner.swallowed.map((pet) =>
+          this.snapshotUnit(pet, "swallowed", owner.uid)
+        )
       ),
       ...this.boards.enemy.flatMap((owner) =>
-        owner.swallowed
-          ? [this.snapshotUnit(owner.swallowed, "swallowed", owner.uid)]
-          : []
+        owner.swallowed.map((pet) =>
+          this.snapshotUnit(pet, "swallowed", owner.uid)
+        )
       )
     ];
     units.sort(
