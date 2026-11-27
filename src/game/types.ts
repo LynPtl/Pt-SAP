@@ -1,3 +1,5 @@
+import type { StaticPackId } from "./packs.js";
+
 export type PetLevel = 1 | 2 | 3;
 export type BattleSide = "player" | "enemy";
 export type RunPhase = "shop" | "battle" | "gameOver";
@@ -118,6 +120,8 @@ export interface ShopState {
 export interface RunState {
   version: 2;
   seed: string;
+  packId: StaticPackId;
+  contentVersion: string;
   shopRngState: number;
   turn: number;
   wins: number;
@@ -232,6 +236,9 @@ export interface BattleInput {
 }
 
 export interface ContentBundle {
+  packId: StaticPackId;
+  packName: string;
+  contentVersion: string;
   pets: Map<string, PetTemplate>;
   petsByTitle: Map<string, PetTemplate>;
   foods: Map<string, FoodTemplate>;

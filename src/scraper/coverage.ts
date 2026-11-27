@@ -13,6 +13,7 @@ import { parseFoods, parsePet } from "./parse.js";
 import { analyzeAbility, analyzeFood } from "./normalize.js";
 
 export function normalizePets(pages: RawPage[]): NormalizedPet[] {
+  const seenTitles = new Set<string>();
   return pages
     .map((page) => {
       const pet: PetRecord = parsePet(page);
@@ -29,6 +30,12 @@ export function normalizePets(pages: RawPage[]): NormalizedPet[] {
           dsl: analyzeAbility(text)
         }))
       } satisfies NormalizedPet;
+    })
+    .filter((pet) => {
+      const title = pet.title.trim().toLocaleLowerCase("en");
+      if (seenTitles.has(title)) return false;
+      seenTitles.add(title);
+      return true;
     })
     .sort((a, b) => (a.tier ?? 99) - (b.tier ?? 99) || a.title.localeCompare(b.title));
 }
@@ -77,12 +84,13 @@ function countValues<T extends string>(values: T[]): Array<[T, number]> {
 export interface CoverageInput {
   generatedAt: string;
   source: string;
+  packName: string;
   pets: NormalizedPet[];
   foods: NormalizedFood[];
 }
 
 export function buildCoverageReport(input: CoverageInput): string {
-  const { pets, foods } = input;
+  const { packName, pets, foods } = input;
   const withAbility = pets.filter((pet) => primaryAbility(pet) !== null);
   const primary = withAbility.map((pet) => ({
     pet,
@@ -160,14 +168,14 @@ export function buildCoverageReport(input: CoverageInput): string {
     .filter((pet) => pet.parseErrors.length > 0)
     .map((pet) => [pet.title, pet.parseErrors.join("; ")]);
 
-  const turtleFoods = foods.filter((food) => food.packs.includes("Turtle Pack"));
-  const foodStatusCounts = countValues(turtleFoods.map((food) => food.dsl.status));
+  const packFoods = foods.filter((food) => food.packs.includes(packName));
+  const foodStatusCounts = countValues(packFoods.map((food) => food.dsl.status));
   const foodStatusMap = new Map(foodStatusCounts);
   const foodFull = foodStatusMap.get("full") ?? 0;
   const foodPartial = foodStatusMap.get("partial") ?? 0;
   const foodCustom = foodStatusMap.get("custom") ?? 0;
-  const foodNone = turtleFoods.length - foodFull - foodPartial - foodCustom;
-  const foodRows = turtleFoods.map((food) => [
+  const foodNone = packFoods.length - foodFull - foodPartial - foodCustom;
+  const foodRows = packFoods.map((food) => [
     food.name,
     food.dsl.text || "(no text)",
     food.dsl.status,
@@ -175,7 +183,7 @@ export function buildCoverageReport(input: CoverageInput): string {
   ]);
 
   const lines: string[] = [];
-  lines.push("# Turtle Pack Coverage");
+  lines.push(`# ${packName} Coverage`);
   lines.push("");
   lines.push(`- Generated: ${input.generatedAt}`);
   lines.push(`- Source: ${input.source}`);
@@ -280,16 +288,16 @@ export function buildCoverageReport(input: CoverageInput): string {
     `- Custom watchlist: ${complexRows.map((row) => row[0]).join(", ") || "none"}`
   );
   lines.push("");
-  lines.push("## Food coverage (Turtle Pack)");
+  lines.push(`## Food coverage (${packName})`);
   lines.push("");
   lines.push(
-    `- Foods found: ${turtleFoods.length} (full ${foodFull}, partial ${foodPartial}, custom ${foodCustom}, none ${foodNone})`
+    `- Foods found: ${packFoods.length} (full ${foodFull}, partial ${foodPartial}, custom ${foodCustom}, none ${foodNone})`
   );
   lines.push("");
   if (foodRows.length > 0) {
     lines.push(markdownTable(["Food", "Text", "Status", "Effects"], foodRows));
   } else {
-    lines.push("No Turtle Pack foods parsed.");
+    lines.push(`No ${packName} foods parsed.`);
   }
   lines.push("");
   lines.push("## Parse issues");

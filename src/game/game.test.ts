@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { resolveBattle } from "./battle.js";
 import { loadContent } from "./content.js";
+import { STATIC_PACKS } from "./packs.js";
 import {
   appendGhost,
   chooseGhost,
@@ -109,6 +110,25 @@ test("Turtle Pack content exposes 60 pets and correctly tiered foods", () => {
   assert.equal(foods.filter((food) => food.tokenOnly).length, 5);
   assert.equal(content.foods.get("sleeping-pill")?.cost, 1);
   assert.equal(content.foods.get("apple")?.cost, 3);
+});
+
+test("all static pack datasets load with the expected roster size", () => {
+  const expected = new Map([
+    ["turtle", 60],
+    ["puppy", 60],
+    ["star", 69],
+    ["golden", 74],
+    ["unicorn", 53],
+    ["danger", 62]
+  ]);
+  for (const pack of STATIC_PACKS) {
+    const packContent = loadContent(pack.id);
+    assert.equal(packContent.packId, pack.id);
+    assert.equal(packContent.packName, pack.name);
+    assert.equal(packContent.pets.size, expected.get(pack.id));
+    assert.ok(packContent.foods.size > 0);
+    assert.match(packContent.contentVersion, /\S/);
+  }
 });
 
 test("shop capacity follows SAP tier progression and generated food slots", () => {
@@ -1277,6 +1297,7 @@ test("ghost selection returns a clone of another run's snapshot", () => {
       turn: state.turn,
       wins: state.wins,
       lives: state.lives,
+      packId: state.packId,
       contentVersion: GHOST_CONTENT_VERSION,
       team: ghostTeam
     }
@@ -1292,6 +1313,7 @@ test("ghost selection returns a clone of another run's snapshot", () => {
       turn: state.turn,
       wins: state.wins,
       lives: state.lives,
+      packId: state.packId,
       contentVersion: GHOST_CONTENT_VERSION,
       team: ghostTeam
     }
@@ -1312,6 +1334,7 @@ test("ghost runId distinguishes same-seed runs and excludes the current run", ()
         turn: state.turn,
         wins: state.wins,
         lives: state.lives,
+        packId: state.packId,
         contentVersion: GHOST_CONTENT_VERSION,
         team
       }
@@ -1329,6 +1352,7 @@ test("ghost runId distinguishes same-seed runs and excludes the current run", ()
         turn: state.turn,
         wins: state.wins,
         lives: state.lives,
+        packId: state.packId,
         contentVersion: GHOST_CONTENT_VERSION,
         team
       }
@@ -1347,8 +1371,26 @@ test("ghost selection rejects snapshots from another content version", () => {
       turn: state.turn,
       wins: state.wins,
       lives: state.lives,
+      packId: state.packId,
       contentVersion: "old-content-version",
       team: [pet("Ant", "old-ant")]
+    }
+  ]);
+  assert.equal(selected, null);
+});
+
+test("ghost selection rejects snapshots from another pack", () => {
+  const state = createRun("ghost-pack", content);
+  const selected = chooseGhost(state, [
+    {
+      id: "puppy-ghost",
+      runSeed: "puppy-run",
+      turn: state.turn,
+      wins: state.wins,
+      lives: state.lives,
+      packId: "puppy",
+      contentVersion: GHOST_CONTENT_VERSION,
+      team: [pet("Ant", "puppy-ant")]
     }
   ]);
   assert.equal(selected, null);
@@ -1406,6 +1448,8 @@ test("run saves and ghost snapshots round-trip", async () => {
     const ghosts = await loadGhosts(ghostPath);
     assert.equal(ghosts.length, 1);
     assert.equal(ghosts[0].team[0].name, "Ant");
+    assert.equal(ghosts[0].packId, state.packId);
+    assert.equal(ghosts[0].contentVersion, state.contentVersion);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -1483,6 +1527,8 @@ test("legacy shop-save shape migrates to tiered capacities", async () => {
     const legacy = structuredClone(state) as unknown as Record<string, unknown>;
     legacy.version = 1;
     delete legacy.lastBattleReplay;
+    delete legacy.packId;
+    delete legacy.contentVersion;
     const shop = legacy.shop as {
       pets: unknown[];
       foods: Array<Record<string, unknown> | null>;
@@ -1499,6 +1545,8 @@ test("legacy shop-save shape migrates to tiered capacities", async () => {
     await writeFile(savePath, JSON.stringify(legacy), "utf8");
     const loaded = await loadRun(savePath);
     assert.equal(loaded.version, 2);
+    assert.equal(loaded.packId, "turtle");
+    assert.equal(loaded.contentVersion, GHOST_CONTENT_VERSION);
     assert.equal(loaded.shop.pets.length, 3);
     assert.equal(loaded.shop.foods.length, 3);
     assert.equal(loaded.shop.foods[0]?.generated, false);

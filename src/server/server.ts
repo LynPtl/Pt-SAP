@@ -11,6 +11,10 @@ import { pathToFileURL } from "node:url";
 import { loadContent } from "../game/content.js";
 import { battleLogLineZh } from "../game/localization.js";
 import {
+  STATIC_PACKS,
+  type StaticPackId
+} from "../game/packs.js";
+import {
   buyFood,
   buyPet,
   createRun,
@@ -50,6 +54,7 @@ interface WebServerOptions {
     user: string;
     password: string;
   } | null;
+  contents?: readonly ContentBundle[];
 }
 
 interface StaticAsset {
@@ -71,6 +76,16 @@ export async function createWebServer(
   content: ContentBundle = loadContent(),
   options: WebServerOptions = {}
 ): Promise<Server> {
+  const contents = new Map<StaticPackId, ContentBundle>();
+  for (const bundle of [content, ...(options.contents ?? [])]) {
+    contents.set(bundle.packId, bundle);
+  }
+  const availablePacks = STATIC_PACKS.map((pack) => ({
+    id: pack.id,
+    name: pack.name,
+    implemented: pack.implemented,
+    available: contents.has(pack.id)
+  }));
   const webDir = path.resolve(options.webDir ?? "web");
   const sessionStore = new SessionStore(
     options.sessionDir ?? DEFAULT_SESSION_DIR
@@ -132,28 +147,49 @@ export async function createWebServer(
           request,
           response,
           sessionStore,
+          contents,
           content,
           options.secureCookie ?? false
         );
         sendJson(response, 200, {
           ok: true,
-          view: buildWebView(resolved.state, content, resolved.sessionId)
+          view: buildWebView(
+            resolved.state,
+            resolved.content,
+            resolved.sessionId,
+            availablePacks
+          )
         });
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/new") {
-        const body = await readJson<{ seed?: unknown }>(request);
+        const body = await readJson<{ seed?: unknown; packId?: unknown }>(
+          request
+        );
+        const requestedPack =
+          typeof body.packId === "string"
+            ? (body.packId as StaticPackId)
+            : content.packId;
+        const selectedContent = contents.get(requestedPack);
+        if (!selectedContent) {
+          throw new Error(`Pack is not available: ${requestedPack}`);
+        }
         const seed =
           typeof body.seed === "string" && body.seed.trim()
             ? body.seed.trim().slice(0, 64)
             : `web-${new Date().toISOString()}`;
         const sessionId = randomUUID();
-        const state = createRun(seed, content);
+        const state = createRun(seed, selectedContent);
         await sessionStore.save(sessionId, state);
         setSessionCookie(response, sessionId, options.secureCookie ?? false);
         sendJson(response, 200, {
           ok: true,
-          view: buildWebView(state, content, sessionId)
+          view: buildWebView(
+            state,
+            selectedContent,
+            sessionId,
+            availablePacks
+          )
         });
         return;
       }
@@ -163,6 +199,7 @@ export async function createWebServer(
           request,
           response,
           sessionStore,
+          contents,
           content,
           options.secureCookie ?? false
         );
@@ -174,7 +211,7 @@ export async function createWebServer(
             const beforeLog = state.log.length;
             const result = await applyAction(
               state,
-              content,
+              resolved.content,
               body,
               ghostPool,
               resolved.sessionId
@@ -188,7 +225,12 @@ export async function createWebServer(
               addedLog: state.log
                 .slice(beforeLog)
                 .map(battleLogLineZh),
-              view: buildWebView(state, content, resolved.sessionId)
+              view: buildWebView(
+                state,
+                resolved.content,
+                resolved.sessionId,
+                availablePacks
+              )
             };
           }
         );
@@ -325,19 +367,44 @@ async function resolveSession(
   request: IncomingMessage,
   response: ServerResponse,
   sessionStore: SessionStore,
-  content: ContentBundle,
+  contents: ReadonlyMap<StaticPackId, ContentBundle>,
+  defaultContent: ContentBundle,
   secureCookie: boolean
-): Promise<{ sessionId: string; state: RunState }> {
+): Promise<{
+  sessionId: string;
+  state: RunState;
+  content: ContentBundle;
+}> {
   const cookieId = readCookie(request, COOKIE_NAME);
   if (cookieId && sessionStore.isSessionId(cookieId)) {
     const loaded = await sessionStore.load(cookieId);
-    if (loaded) return { sessionId: cookieId, state: loaded };
+    if (loaded) {
+      const loadedContent = contents.get(loaded.packId);
+      if (!loadedContent) {
+        throw new Error(
+          `Saved run uses an unavailable pack: ${loaded.packId}`
+        );
+      }
+      if (loaded.contentVersion !== loadedContent.contentVersion) {
+        throw new Error(
+          `Saved run content version ${loaded.contentVersion} does not match ${loadedContent.contentVersion}`
+        );
+      }
+      return {
+        sessionId: cookieId,
+        state: loaded,
+        content: loadedContent
+      };
+    }
   }
   const sessionId = randomUUID();
-  const state = createRun(`web-${new Date().toISOString()}`, content);
+  const state = createRun(
+    `web-${new Date().toISOString()}`,
+    defaultContent
+  );
   await sessionStore.save(sessionId, state);
   setSessionCookie(response, sessionId, secureCookie);
-  return { sessionId, state };
+  return { sessionId, state, content: defaultContent };
 }
 
 function readCookie(request: IncomingMessage, name: string): string | null {
@@ -500,12 +567,17 @@ function parsePort(value: string | undefined): number {
 async function start(): Promise<void> {
   const host = process.env.HOST ?? "0.0.0.0";
   const port = parsePort(process.env.PORT);
-  const server = await createWebServer(loadContent(), {
+  const defaultContent = loadContent();
+  const contents = STATIC_PACKS.filter(
+    (pack) => pack.implemented && pack.id !== defaultContent.packId
+  ).map((pack) => loadContent(pack.id));
+  const server = await createWebServer(defaultContent, {
     sessionDir: process.env.PT_SAP_SESSION_DIR,
     ghostPath: process.env.PT_SAP_GHOST_PATH,
     webDir: process.env.PT_SAP_WEB_DIR,
     secureCookie: process.env.PT_SAP_SECURE_COOKIE === "1",
-    basicAuth: parseBasicAuth(process.env.PT_SAP_BASIC_AUTH)
+    basicAuth: parseBasicAuth(process.env.PT_SAP_BASIC_AUTH),
+    contents
   });
   server.listen(port, host, () => {
     console.log(`pt-sap web UI listening on http://${host}:${port}`);

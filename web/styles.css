@@ -909,7 +909,8 @@ button:disabled {
   font-size: 12px;
 }
 
-.dialog input {
+.dialog input,
+.dialog select {
   width: 100%;
   min-height: 36px;
   padding: 8px 12px;

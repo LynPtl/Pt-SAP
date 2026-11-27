@@ -1,8 +1,23 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { buildCoverageReport, normalizeFoods, normalizePets } from "./coverage.js";
-import type { NormalizedFood, NormalizedPet, RawCache, RawPage } from "./types.js";
+import {
+  STATIC_PACKS,
+  packById,
+  type PackDefinition,
+  type StaticPackId
+} from "../game/packs.js";
+import {
+  buildCoverageReport,
+  normalizeFoods,
+  normalizePets
+} from "./coverage.js";
+import type {
+  NormalizedFood,
+  NormalizedPet,
+  RawCache,
+  RawPage
+} from "./types.js";
 import { getCategoryMembers, getPages } from "./wiki.js";
 
 const ROOT = process.cwd();
@@ -10,8 +25,28 @@ const REFERENCE_DIR = path.join(ROOT, "reference");
 const RAW_DIR = path.join(REFERENCE_DIR, "raw");
 const NORMALIZED_DIR = path.join(REFERENCE_DIR, "normalized");
 const REPORTS_DIR = path.join(ROOT, "reports");
-const CACHE_PATH = path.join(RAW_DIR, "turtle-pack-pages.json");
 const SOURCE = "https://superautopets.wiki.gg";
+
+interface PackPaths {
+  cache: string;
+  pets: string;
+  normalizedPets: string;
+  normalizedFoods: string;
+  report: string;
+}
+
+function packPaths(pack: PackDefinition): PackPaths {
+  return {
+    cache: path.join(RAW_DIR, `${pack.slug}-pages.json`),
+    pets: path.join(RAW_DIR, `${pack.slug}-pets.txt`),
+    normalizedPets: path.join(NORMALIZED_DIR, `${pack.slug}.json`),
+    normalizedFoods: path.join(
+      NORMALIZED_DIR,
+      `${pack.slug}-foods.json`
+    ),
+    report: path.join(REPORTS_DIR, `${pack.slug}-coverage.md`)
+  };
+}
 
 function isRawPage(value: unknown): value is RawPage {
   if (!value || typeof value !== "object") return false;
@@ -35,12 +70,15 @@ function isRawCache(value: unknown): value is RawCache {
   );
 }
 
-async function loadCache(): Promise<RawCache | null> {
-  if (!existsSync(CACHE_PATH)) return null;
-  const text = await readFile(CACHE_PATH, "utf8");
+async function loadCache(
+  pack: PackDefinition
+): Promise<RawCache | null> {
+  const cachePath = packPaths(pack).cache;
+  if (!existsSync(cachePath)) return null;
+  const text = await readFile(cachePath, "utf8");
   const parsed: unknown = JSON.parse(text);
   if (!isRawCache(parsed)) {
-    throw new Error(`Invalid cache format: ${CACHE_PATH}`);
+    throw new Error(`Invalid cache format: ${cachePath}`);
   }
   return parsed;
 }
@@ -55,28 +93,26 @@ async function ensureDirectories(): Promise<void> {
   await mkdir(REPORTS_DIR, { recursive: true });
 }
 
-async function scrape(refresh: boolean): Promise<void> {
-  await ensureDirectories();
-
-  const turtleCategory = await getCategoryMembers("Category:Turtle Pack");
+async function scrape(
+  pack: PackDefinition,
+  refresh: boolean
+): Promise<void> {
+  const paths = packPaths(pack);
+  const packCategory = await getCategoryMembers(pack.category);
   const petsCategory = await getCategoryMembers("Category:Pets");
   const petsSet = new Set(petsCategory);
-  const turtlePets = [...new Set(turtleCategory)]
+  const packPets = [...new Set(packCategory)]
     .filter((title) => petsSet.has(title))
     .sort((a, b) => a.localeCompare(b));
 
-  if (turtlePets.length === 0) {
-    throw new Error("No Turtle Pack pets found in the wiki categories");
+  if (packPets.length === 0) {
+    throw new Error(`No ${pack.name} pets found in the wiki categories`);
   }
 
-  await writeFile(
-    path.join(RAW_DIR, "turtle-pets.txt"),
-    `${turtlePets.join("\n")}\n`,
-    "utf8"
-  );
+  await writeFile(paths.pets, `${packPets.join("\n")}\n`, "utf8");
 
-  const requestedTitles = [...turtlePets, "Food"];
-  const cached = refresh ? null : await loadCache();
+  const requestedTitles = [...packPets, "Food"];
+  const cached = refresh ? null : await loadCache(pack);
   const cachedTitles = new Set(cached?.pages.map((page) => page.title) ?? []);
   const missing = requestedTitles.filter((title) => !cachedTitles.has(title));
   const fetched = missing.length > 0 ? await getPages(missing) : [];
@@ -98,54 +134,59 @@ async function scrape(refresh: boolean): Promise<void> {
 
   const cache: RawCache = {
     generatedAt: new Date().toISOString(),
-    source: `${SOURCE} (Category:Turtle Pack)`,
+    source: `${SOURCE} (${pack.category})`,
     pages
   };
-  await writeJson(CACHE_PATH, cache);
+  await writeJson(paths.cache, cache);
 
   console.log(
-    `scraped ${turtlePets.length} Turtle Pack pets + Food (${fetched.length} pages fetched, ${pages.length - fetched.length} cached)`
+    `${pack.name}: scraped ${packPets.length} pets + Food ` +
+      `(${fetched.length} pages fetched, ${pages.length - fetched.length} cached)`
   );
 }
 
-async function report(): Promise<void> {
-  await ensureDirectories();
-  const cache = await loadCache();
+async function report(pack: PackDefinition): Promise<void> {
+  const paths = packPaths(pack);
+  const cache = await loadCache(pack);
   if (!cache) {
     throw new Error(
-      `No raw cache found at ${CACHE_PATH}. Run "npm run scrape" first.`
+      `No raw cache found at ${paths.cache}. Run "npm run scrape" first.`
     );
   }
 
   const foodPage = cache.pages.find((page) => page.title === "Food");
-  if (!foodPage) throw new Error("Food page missing from cache");
+  if (!foodPage) throw new Error(`${pack.name}: Food page missing from cache`);
 
   const petPages = cache.pages.filter((page) => page.title !== "Food");
   const pets: NormalizedPet[] = normalizePets(petPages);
   const allFoods: NormalizedFood[] = normalizeFoods(foodPage);
-  const turtleFoods = allFoods.filter((food) =>
-    food.packs.includes("Turtle Pack")
+  const packFoods = allFoods.filter((food) =>
+    food.packs.includes(pack.name)
   );
 
-  await writeJson(path.join(NORMALIZED_DIR, "turtle-pack.json"), {
+  await writeJson(paths.normalizedPets, {
+    pack: pack.name,
+    packId: pack.id,
     generatedAt: cache.generatedAt,
     source: cache.source,
     pets
   });
-  await writeJson(path.join(NORMALIZED_DIR, "turtle-pack-foods.json"), {
+  await writeJson(paths.normalizedFoods, {
+    pack: pack.name,
+    packId: pack.id,
     generatedAt: cache.generatedAt,
     source: cache.source,
-    foods: turtleFoods
+    foods: packFoods
   });
 
   const markdown = buildCoverageReport({
     generatedAt: new Date().toISOString(),
     source: cache.source,
+    packName: pack.name,
     pets,
     foods: allFoods
   });
-  const reportPath = path.join(REPORTS_DIR, "turtle-pack-coverage.md");
-  await writeFile(reportPath, markdown, "utf8");
+  await writeFile(paths.report, markdown, "utf8");
 
   const primary = pets
     .map((pet) => pet.abilities.find((ability) => ability.text.length > 0)?.dsl)
@@ -155,24 +196,44 @@ async function report(): Promise<void> {
   const custom = primary.filter((dsl) => dsl?.status === "custom").length;
 
   console.log(
-    `report written: ${reportPath} (${pets.length} pets, ${full} full, ${partial} partial, ${custom} custom, ${turtleFoods.length} Turtle Pack foods)`
+    `${pack.name}: report ${paths.report} ` +
+      `(${pets.length} pets, ${full} full, ${partial} partial, ${custom} custom, ` +
+      `${packFoods.length} foods)`
   );
+}
+
+function parsePack(value: string): PackDefinition {
+  return packById(value as StaticPackId);
+}
+
+function selectedPacks(args: string[]): PackDefinition[] {
+  const packArg = args.find((arg) => arg.startsWith("--pack="));
+  if (!packArg) return [...STATIC_PACKS];
+  const id = packArg.slice("--pack=".length);
+  if (id === "all") return [...STATIC_PACKS];
+  return [parsePack(id)];
 }
 
 async function main(): Promise<void> {
   const command = process.argv[2] ?? "all";
-  const refresh = process.argv.includes("--refresh");
-  if (command === "scrape") {
-    await scrape(refresh);
-  } else if (command === "report") {
-    await report();
-  } else if (command === "all") {
-    await scrape(refresh);
-    await report();
-  } else {
+  const args = process.argv.slice(3);
+  const refresh = args.includes("--refresh");
+  const packs = selectedPacks(args);
+  await ensureDirectories();
+
+  if (command !== "scrape" && command !== "report" && command !== "all") {
     throw new Error(
       `Unknown command "${command}". Use scrape, report, or all.`
     );
+  }
+
+  for (const pack of packs) {
+    if (command === "scrape" || command === "all") {
+      await scrape(pack, refresh);
+    }
+    if (command === "report" || command === "all") {
+      await report(pack);
+    }
   }
 }
 

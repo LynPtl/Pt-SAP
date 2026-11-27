@@ -1,5 +1,10 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  DEFAULT_PACK_ID,
+  TURTLE_CONTENT_VERSION,
+  type StaticPackId
+} from "./packs.js";
 import { deriveSeed, SeededRandom } from "./rng.js";
 import type { PetInstance, RunState } from "./types.js";
 
@@ -10,6 +15,7 @@ export interface GhostSnapshot {
   turn: number;
   wins: number;
   lives: number;
+  packId: StaticPackId;
   contentVersion: string;
   team: PetInstance[];
 }
@@ -27,8 +33,7 @@ interface GhostFile {
 export const GHOST_LIMIT = 1000;
 export const GHOST_BUCKET_LIMIT = 64;
 const ghostQueues = new Map<string, Promise<void>>();
-export const GHOST_CONTENT_VERSION =
-  "turtle-pack-2026-11-27-0a0e4423";
+export const GHOST_CONTENT_VERSION = TURTLE_CONTENT_VERSION;
 
 export async function withGhostLock<T>(
   filePath: string,
@@ -67,7 +72,8 @@ export async function loadGhosts(
         typeof snapshot.lives === "number"
           ? snapshot.lives
           : 0,
-      contentVersion: snapshot.contentVersion ?? GHOST_CONTENT_VERSION
+      contentVersion: snapshot.contentVersion ?? GHOST_CONTENT_VERSION,
+      packId: snapshot.packId ?? DEFAULT_PACK_ID
     }));
   } catch (error) {
     const code =
@@ -100,7 +106,8 @@ export async function appendGhost(
     turn: snapshot.turn,
     wins: snapshot.wins,
     lives: snapshot.lives,
-    contentVersion: GHOST_CONTENT_VERSION,
+    packId: state.packId,
+    contentVersion: state.contentVersion,
     team: structuredClone(snapshot.team)
   });
   const latest = compactGhosts(existing);
@@ -147,8 +154,9 @@ export function selectGhost(
       (snapshot.runId
         ? snapshot.runId !== currentRunId
         : snapshot.runSeed !== state.seed) &&
+      (snapshot.packId ?? DEFAULT_PACK_ID) === state.packId &&
       (snapshot.contentVersion ?? GHOST_CONTENT_VERSION) ===
-        GHOST_CONTENT_VERSION &&
+        state.contentVersion &&
       snapshot.turn === state.turn &&
       snapshot.wins === state.wins &&
       snapshot.team.length > 0

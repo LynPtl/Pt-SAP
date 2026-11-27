@@ -1,4 +1,11 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import {
+  DEFAULT_PACK_ID,
+  TURTLE_CONTENT_VERSION,
+  packById,
+  type StaticPackId
+} from "./packs.js";
 import type {
   ContentBundle,
   FoodTemplate,
@@ -30,12 +37,6 @@ interface NormalizedFoodFile {
   }>;
 }
 
-const PET_FILE = new URL("../../reference/normalized/turtle-pack.json", import.meta.url);
-const FOOD_FILE = new URL(
-  "../../reference/normalized/turtle-pack-foods.json",
-  import.meta.url
-);
-
 function assertPetTier(value: number | null): value is PetTemplate["tier"] {
   return value !== null && Number.isInteger(value) && value >= 1 && value <= 6;
 }
@@ -50,17 +51,40 @@ function foodCost(id: string): number {
   return id === "sleeping-pill" ? 1 : 3;
 }
 
-export function loadContent(): ContentBundle {
-  const petData = JSON.parse(
-    readFileSync(PET_FILE, "utf8")
-  ) as NormalizedPetFile;
-  const foodData = JSON.parse(
-    readFileSync(FOOD_FILE, "utf8")
-  ) as NormalizedFoodFile;
+export function loadContent(
+  packId: StaticPackId = DEFAULT_PACK_ID
+): ContentBundle {
+  const pack = packById(packId);
+  const petFile = new URL(
+    `../../reference/normalized/${pack.slug}.json`,
+    import.meta.url
+  );
+  const foodFile = new URL(
+    `../../reference/normalized/${pack.slug}-foods.json`,
+    import.meta.url
+  );
+  const petText = readFileSync(petFile, "utf8");
+  const foodText = readFileSync(foodFile, "utf8");
+  const petData = JSON.parse(petText) as NormalizedPetFile;
+  const foodData = JSON.parse(foodText) as NormalizedFoodFile;
+  const contentHash = createHash("sha256")
+    .update(petText)
+    .update(foodText)
+    .digest("hex")
+    .slice(0, 8);
+  const contentVersion =
+    packId === "turtle"
+      ? TURTLE_CONTENT_VERSION
+      : `${pack.slug}-${contentHash}`;
 
   const pets = new Map<string, PetTemplate>();
   const petsByTitle = new Map<string, PetTemplate>();
+  const normalizedTitles = new Set<string>();
   for (const pet of petData.pets) {
+    const normalizedTitle = pet.title.trim().toLocaleLowerCase("en");
+    if (normalizedTitles.has(normalizedTitle)) {
+      continue;
+    }
     if (!assertPetTier(pet.tier)) {
       throw new Error(`Pet ${pet.title} has no valid tier`);
     }
@@ -83,6 +107,7 @@ export function loadContent(): ContentBundle {
     if (pets.has(template.id)) {
       throw new Error(`Duplicate pet id ${template.id}`);
     }
+    normalizedTitles.add(normalizedTitle);
     pets.set(template.id, template);
     petsByTitle.set(template.title, template);
   }
@@ -115,7 +140,14 @@ export function loadContent(): ContentBundle {
     text: "Give one pet attack only."
   });
 
-  return { pets, petsByTitle, foods };
+  return {
+    packId,
+    packName: pack.name,
+    contentVersion,
+    pets,
+    petsByTitle,
+    foods
+  };
 }
 
 export function petByTitle(

@@ -2,7 +2,7 @@
 
 状态：进行中，不可宣称“完全复刻”  
 最后核对：2026-11-27  
-目标范围：SAP Turtle Pack、Arena Normal、私有文字版
+目标范围：SAP 六个静态 DLC Pack、Arena Normal、私有文字版
 
 ## 证据等级
 
@@ -13,7 +13,7 @@
 
 ## 目标版本
 
-当前绑定的是 **2026-11-27 时公开的 Turtle Pack Normal 规则**；Wiki 最后记录的
+当前可玩基线是 **2026-11-27 时公开的 Turtle Pack Normal 规则**；Wiki 最后记录的
 公开版本为 **0.48（2026-05-21）**。当前私有内容哈希为：
 
 - 宠物：`0A0E44238477151BEB80A998EF45633F160F43266ADB9D8DE0F463ACBE2FC074`
@@ -75,6 +75,21 @@
 | 成就/收藏/红丝带持久化 | 展示层部分 | A | 胜利结算 | 没有账户级收藏 |
 | 结算最终阵容 | 已展示完整只读队伍卡 | A | `renderFinalPetCard` | 无 |
 | 全部 180 个技能等级 | 有执行入口 | — | `battle.ts` / `run.ts` | 未逐条差分验证 |
+| 六 Pack 数据加载 | 已接入 | A | `content.ts` / `packs.ts` | 非 Turtle 内容仍需固定版本 |
+| Pack 内容版本隔离 | 已接入 | A | `RunState.contentVersion` | 首次开放前生成并冻结 |
+| Pack Ghost 隔离 | 已接入 | A | `selectGhost` / PostgreSQL | 按 Pack 和内容版本双过滤 |
+| DLC 新状态机 | 未完成 | — | — | Toy、Ailment、Trumpet、Mana、Transform 等 |
+
+## DLC 执行器状态
+
+| Pack | 数据 | 战斗技能 | 商店技能 | 新食物/Perk | 可开放 |
+| --- | --- | --- | --- | --- | --- |
+| Turtle | 完成 | 完成 | 完成 | 完成 | 是 |
+| Puppy | 完成 | 待实现 | 待实现 | 待实现 | 否 |
+| Star | 完成 | 待实现 | 待实现 | 待实现 | 否 |
+| Golden | 完成 | 待实现 | 待实现 | 待实现 | 否 |
+| Unicorn | 完成 | 待实现 | 待实现 | 待实现 | 否 |
+| Danger | 完成 | 待实现 | 待实现 | 待实现 | 否 |
 
 ## P0：继续实现顺序
 

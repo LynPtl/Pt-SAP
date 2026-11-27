@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="pt-sap 私有 Turtle Pack 自动战斗游戏"
+      content="pt-sap 私有 SAP 自动战斗游戏"
     />
-    <title>pt-sap · Turtle Pack</title>
+    <title>pt-sap · SAP 自动战斗</title>
     <link rel="stylesheet" href="/styles.css" />
     <script src="/app.js" defer></script>
   </head>
@@ -17,7 +17,7 @@
         <div class="brand-mark">pt</div>
         <div>
           <h1>pt-sap</h1>
-          <p>Turtle Pack · SAP Normal</p>
+          <p id="pack-label">SAP Normal</p>
         </div>
       </div>
       <div id="stats" class="stats" aria-label="对局状态"></div>
@@ -158,6 +158,8 @@
           autocomplete="off"
           placeholder="例如 daily-2026-11-27"
         />
+        <label for="pack-select">DLC Pack</label>
+        <select id="pack-select" name="packId"></select>
         <p class="muted">相同种子和相同操作会得到相同战报。</p>
         <div class="dialog-actions">
           <button class="button ghost" value="cancel" type="submit">

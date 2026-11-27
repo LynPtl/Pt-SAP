@@ -7,6 +7,7 @@
 目标形态：
 
 - 5 格队伍，顺序即站位
+- Turtle、Puppy、Star、Golden、Unicorn、Danger 六个静态 Pack
 - 每回合 10 金；商店容量按档位增长，并保留 2 个生成食物槽
 - 食物是单件装备，不做合成
 - 标签/羁绊只做推荐和技能条件，不做 2/4/6 硬阈值
@@ -16,8 +17,9 @@
 
 **当前状态：私有 SAP Normal 严格玩法副本。战斗引擎、分档商店、生成食物、
 升级奖励、商店阶段 Faint 链、真实玩家快照 + 系统 Ghost、共享 PostgreSQL
-Ghost 池、中文 Web UI 和战斗时间轴回放已接入；当前 80 个测试通过。下一阶段是逐技能 Oracle、
-商店复杂占位和更完整的多人事务层。**
+Ghost 池、中文 Web UI 和战斗时间轴回放已接入。六套 Pack 的抓取、归一化、
+内容版本、Ghost 隔离和选择入口已接入；当前只有 Turtle 允许开局。下一阶段按
+Puppy → Star → Golden → Unicorn → Danger 逐 Pack 完成执行器与 Oracle。**
 
 本项目独立运行，**不要接入 ptnook**。
 
@@ -25,8 +27,8 @@ Ghost 池、中文 Web UI 和战斗时间轴回放已接入；当前 80 个测�
 
 - 路径：`d:/pt-sap`
 - 分支：`main`
-- 工作区：商店/生成物/Ghost 增强批次准备提交
-- 最近已推送提交：`12b70a4`
+- 工作区：多 Pack 内容、Pack 选择和 Ghost 隔离批次
+- 最近已推送提交：`985e134`
 - 环境：Windows，Node `v24.20.0`，npm `11.19.0`
 - 运行时依赖：`zod`、`pg`
 - 开发依赖：`typescript`、`tsx`、`@types/node`、`@types/pg`
@@ -37,6 +39,8 @@ Ghost 池、中文 Web UI 和战斗时间轴回放已接入；当前 80 个测�
 cd d:/pt-sap
 npm install
 npm run coverage        # 抓取 + 归一化 + 报告
+npm run coverage -- --pack=puppy
+npm run coverage -- --pack=all
 npm run scrape          # 只抓取/更新缓存
 npm run report          # 只用缓存重新生成报告
 npm run play            # 运行私有文本游戏
@@ -60,6 +64,7 @@ pt-sap/
     battle.ts        # 确定性战斗引擎
     run.ts           # 商店、经济、升级、回合和幽灵对手
     ghosts.ts        # 本机异步幽灵快照
+    packs.ts         # 静态 Pack 清单、slug 和可玩状态
     cli.ts           # 可玩文本客户端
     *.test.ts
   src/server/
@@ -78,7 +83,7 @@ pt-sap/
     raw/             # 原始 wikitext 缓存
     normalized/      # 结构化 JSON（仍含 SAP 名称/英文文本）
   reports/
-    turtle-pack-coverage.md   # 已提交
+    <pack>-coverage.md        # 六个 Pack 的抓取覆盖报告
   README.md
   LICENSE            # MIT
   SPEC.md            # 严格 SAP Normal 玩法规格
@@ -127,7 +132,20 @@ Turtle Pack：
 
 主要效果：`modifyStats` 31、`dealDamage` 10、`summon` 8、`perk` 5、`shop` 5、`gold` 4、`food` 3、`copy` 2、`swallow` 1。
 
-**重要：`full` 只是关键词命中，不代表引擎能直接执行。** 复杂列表见 `reports/turtle-pack-coverage.md` 的 “Complex abilities”。
+六个 Pack 的抓取和报告均已接入：
+
+| Pack | 宠物 | 食物 | 当前状态 |
+| --- | ---: | ---: | --- |
+| Turtle | 60 | 21 | 可玩 |
+| Puppy | 60 | 21 | 数据已接入，执行器待完成 |
+| Star | 69 | 21 | 数据已接入，执行器待完成 |
+| Golden | 74 | 20 | 数据已接入，执行器待完成 |
+| Unicorn | 53 | 21 | 数据已接入，执行器待完成 |
+| Danger | 62 | 19 | 数据已接入，执行器待完成 |
+
+**重要：`full` 只是关键词命中，不代表引擎能直接执行。** 未完成执行器的 Pack
+必须在 API 和新局选择器里保持禁用，不能只把卡牌文本塞进商店。复杂列表见各
+Pack 的 `reports/<slug>-coverage.md`。
 
 ## 6. 归一化数据结构
 

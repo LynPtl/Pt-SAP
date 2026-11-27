@@ -39,6 +39,12 @@ test("web server serves UI and supports a session action", async (t) => {
   assert.ok(cookie);
   const stateData = (await stateResponse.json()) as {
     view: {
+      pack: { id: string };
+      availablePacks: Array<{
+        id: string;
+        implemented: boolean;
+        available: boolean;
+      }>;
       state: {
         turn: number;
         pets: Array<{ ability: string }>;
@@ -46,6 +52,14 @@ test("web server serves UI and supports a session action", async (t) => {
     };
   };
   assert.equal(stateData.view.state.turn, 1);
+  assert.equal(stateData.view.pack.id, "turtle");
+  assert.equal(stateData.view.availablePacks.length, 6);
+  assert.deepEqual(
+    stateData.view.availablePacks
+      .filter((pack) => pack.implemented || pack.available)
+      .map((pack) => pack.id),
+    ["turtle"]
+  );
   assert.equal(stateData.view.state.pets.length, 3);
   assert.ok(stateData.view.state.pets[0].ability);
 
@@ -159,6 +173,13 @@ test("web server serves UI and supports a session action", async (t) => {
     secondEndData.view.state.lastBattleReplay?.opponentKind,
     "snapshot"
   );
+
+  const unavailablePack = await fetch(`${base}/api/new`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ seed: "not-ready", packId: "puppy" })
+  });
+  assert.equal(unavailablePack.status, 400);
 });
 
 test("optional basic authentication protects the UI but not health checks", async (t) => {

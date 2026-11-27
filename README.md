@@ -8,7 +8,8 @@
 - 每回合 10 金；商店容量随档位增长并包含 2 个生成食物槽。
 - 购买、出售、刷新、冻结、合并、经验和食物。
 - 10 胜 / 5 命、第 3 回合补命、平局。
-- Turtle Pack 60 只宠物、21 种标准食物，以及 Cow 生成的 Chocolate Milk。
+- 已接入 Turtle、Puppy、Star、Golden、Unicorn、Danger 六套 Pack 内容。
+- Turtle Pack 60 只宠物、21 种标准食物，以及 Cow 生成的 Chocolate Milk；这是当前唯一已开放执行的 Pack。
 - 确定性战斗引擎、可读战斗日志和真实玩家幽灵队快照。
 - 双方阵容可视化、攻击目标/方向、伤害、倒下、召唤与胜负时间轴回放。
 - 战斗回放明确标记对手是真实玩家快照还是系统生成的 Ghost。
@@ -80,8 +81,15 @@ npm run report
 wiki.gg MediaWiki API
   -> reference/raw/
   -> reference/normalized/
-  -> reports/turtle-pack-coverage.md
+  -> reports/<pack>-coverage.md
   -> src/game content loader
+```
+
+指定单个 Pack 或刷新全部：
+
+```bash
+npm run coverage -- --pack=puppy
+npm run coverage -- --pack=all --refresh
 ```
 
 引擎不会修改 `reference/`。需要刷新数据时重新运行抓取命令。
@@ -106,5 +114,8 @@ Ghost 快照由 `postgres-data` 卷保存。
 当前 Web 服务已支持隔离浏览器会话、共享 PostgreSQL Ghost 池和本地 JSON
 回退。未来 WebSocket 多人版本会复用同一套纯游戏引擎；数据库只位于服务器
 适配层，不进入战斗结算核心。
+
+六套 Pack 的数据、内容版本和 Ghost 匹配已经隔离。执行器尚未完成的 Pack
+会显示在新局选择器中但保持禁用，避免出现静默不触发的卡牌。
 
 代码使用 MIT；私有 SAP 衍生数据、名称和 Wiki 原文仅限本项目私有使用。

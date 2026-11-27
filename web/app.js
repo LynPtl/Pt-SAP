@@ -23,6 +23,8 @@ const refs = {
   newRunDialog: document.querySelector("#new-run-dialog"),
   newRunButton: document.querySelector("#new-run"),
   confirmNewRun: document.querySelector("#confirm-new-run"),
+  packSelect: document.querySelector("#pack-select"),
+  packLabel: document.querySelector("#pack-label"),
   closeBattle: document.querySelector("#close-battle"),
   showBattle: document.querySelector("#show-battle"),
   seedInput: document.querySelector("#seed-input"),
@@ -508,6 +510,7 @@ function showLevelUpFeedback(leveledPets, petsBefore) {
 function render() {
   if (!game) return;
   hidePerkPopover();
+  renderPackSelection();
   renderStats();
   renderTeam();
   renderShop();
@@ -518,6 +521,21 @@ function render() {
     requestInFlight || gameOver || game.state.gold < 1;
   refs.endTurn.disabled = requestInFlight || gameOver;
   refs.endTurnTop.disabled = requestInFlight || gameOver;
+}
+
+function renderPackSelection() {
+  if (!game) return;
+  refs.packLabel.textContent = `${game.pack.name} · SAP Normal`;
+  const selected = refs.packSelect.value;
+  refs.packSelect.replaceChildren();
+  for (const pack of game.availablePacks ?? []) {
+    const option = el("option", "", `${pack.name}${pack.available ? "" : "（开发中）"}`);
+    option.value = pack.id;
+    option.disabled = !pack.available || !pack.implemented;
+    option.selected = pack.id === (selected || game.pack.id);
+    refs.packSelect.append(option);
+  }
+  if (!refs.packSelect.value) refs.packSelect.value = game.pack.id;
 }
 
 function renderStats() {
@@ -1582,6 +1600,7 @@ refs.endTurnTop.addEventListener("click", endTurnFromUi);
 refs.newRunButton.addEventListener("click", () => {
   if (refs.gameOverDialog.open) refs.gameOverDialog.close();
   refs.seedInput.value = "";
+  renderPackSelection();
   refs.newRunDialog.showModal();
   refs.seedInput.focus();
 });
@@ -1591,9 +1610,10 @@ refs.confirmNewRun.addEventListener("click", async () => {
   refs.newRunDialog.close();
   setBusy(true);
   try {
+    const packId = refs.packSelect.value || game?.pack.id;
     const data = await api("/api/new", {
       method: "POST",
-      body: JSON.stringify(seed ? { seed } : {})
+      body: JSON.stringify({ ...(seed ? { seed } : {}), packId })
     });
     game = data.view;
     selectedUid = null;
@@ -1641,6 +1661,7 @@ refs.gameOverReview.addEventListener("click", () => {
 refs.gameOverNew.addEventListener("click", () => {
   refs.gameOverDialog.close();
   refs.seedInput.value = "";
+  renderPackSelection();
   refs.newRunDialog.showModal();
   refs.seedInput.focus();
 });

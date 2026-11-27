@@ -5,6 +5,10 @@ import {
   petShopCapacity,
   totalFoodShopCapacity
 } from "./run.js";
+import {
+  DEFAULT_PACK_ID,
+  TURTLE_CONTENT_VERSION
+} from "./packs.js";
 import type { RunState } from "./types.js";
 
 type StoredRunState = Omit<RunState, "version"> & {
@@ -57,6 +61,8 @@ function migrateRunState(
   const petCapacity = petShopCapacity(state.shopTier);
   const ordinaryFoodCapacity = ordinaryFoodShopCapacity(state.shopTier);
   const foodCapacity = totalFoodShopCapacity(state.shopTier);
+  state.packId ??= DEFAULT_PACK_ID;
+  state.contentVersion ??= TURTLE_CONTENT_VERSION;
 
   const pets = [...state.shop.pets];
   while (pets.length < petCapacity) pets.push(null);

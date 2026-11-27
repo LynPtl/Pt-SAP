@@ -54,7 +54,12 @@ export function parsePet(page: RawPage): PetRecord {
   }
 
   const { params } = parseTemplate(infobox);
-  const tier = parseInteger(params.get("tier"));
+  const categoryTier = page.content.match(
+    /\[\[Category:Tier\s+([1-6])\]\]/i
+  );
+  const tier =
+    parseInteger(params.get("tier")) ??
+    (categoryTier ? Number.parseInt(categoryTier[1], 10) : null);
   const [attack, health] = parseStats(params.get("attack/health"));
   const id = params.get("ID")?.trim() || slug(page.title);
   const rawLevels = ["level_1", "level_2", "level_3"].map(

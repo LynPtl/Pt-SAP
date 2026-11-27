@@ -1,6 +1,6 @@
 # Turtle Pack Coverage
 
-- Generated: 2026-11-27T02:11:45.688Z
+- Generated: 2026-11-27T08:10:10.213Z
 - Source: https://superautopets.wiki.gg (Category:Turtle Pack)
 - Pets scraped: 60
 - Pets with ability text: 60

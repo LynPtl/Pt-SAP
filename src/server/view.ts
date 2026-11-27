@@ -51,6 +51,17 @@ export type FoodTargetMode = "single" | "random" | "none";
 
 export interface WebView {
   sessionId: string;
+  pack: {
+    id: ContentBundle["packId"];
+    name: string;
+    contentVersion: string;
+  };
+  availablePacks: Array<{
+    id: ContentBundle["packId"];
+    name: string;
+    implemented: boolean;
+    available: boolean;
+  }>;
   state: {
     seed: string;
     turn: number;
@@ -559,10 +570,24 @@ function rewardGroupsView(
 export function buildWebView(
   state: RunState,
   content: ContentBundle,
-  sessionId: string
+  sessionId: string,
+  availablePacks: WebView["availablePacks"] = [
+    {
+      id: content.packId,
+      name: content.packName,
+      implemented: true,
+      available: true
+    }
+  ]
 ): WebView {
   return {
     sessionId,
+    pack: {
+      id: content.packId,
+      name: content.packName,
+      contentVersion: content.contentVersion
+    },
+    availablePacks,
     state: {
       seed: state.seed,
       turn: state.turn,

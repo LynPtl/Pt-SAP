@@ -1708,6 +1708,8 @@ export function createRun(seed: string, content: ContentBundle): RunState {
   const state: RunState = {
     version: 2,
     seed,
+    packId: content.packId,
+    contentVersion: content.contentVersion,
     shopRngState,
     turn: 1,
     wins: 0,
