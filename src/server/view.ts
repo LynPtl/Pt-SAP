@@ -93,6 +93,8 @@ export interface BattleReplayView {
   turn: number;
   seed: string;
   outcome: "win" | "loss" | "draw";
+  opponentKind: "snapshot" | "generated";
+  opponentId?: string;
   playerTeam: BattleReplayPetView[];
   enemyTeam: BattleReplayPetView[];
   events: Array<{
@@ -287,6 +289,8 @@ function battleReplayView(
     turn: replay.turn,
     seed: replay.seed,
     outcome: replay.outcome,
+    opponentKind: replay.opponentKind ?? "generated",
+    ...(replay.opponentId ? { opponentId: replay.opponentId } : {}),
     playerTeam: replay.playerTeam.map((pet) =>
       battleReplayPetView(content, pet)
     ),

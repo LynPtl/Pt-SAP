@@ -6,6 +6,7 @@ import type {
   FoodTemplate,
   LevelUpCause,
   LevelUpRecord,
+  OpponentKind,
   PerkId,
   PerkState,
   PetInstance,
@@ -430,15 +431,16 @@ function replaceShopFoodWithTwoMilk(
   level: PetLevel,
   templateId: "milk" | "chocolate-milk"
 ): void {
-  const ordinaryCapacity = ordinaryFoodShopCapacity(state.shopTier);
+  const capacity = totalFoodShopCapacity(state.shopTier);
+  const firstGeneratedSlot = capacity - GENERATED_FOOD_SLOT_CAPACITY;
   state.shop.foods = Array.from(
-    { length: totalFoodShopCapacity(state.shopTier) },
+    { length: capacity },
     (_value, index) => {
-      if (index >= 2) return null;
+      if (index < firstGeneratedSlot) return null;
       return makeShopFood(state, content, templateId, {
         cost: 0,
         milkLevel: level,
-        generated: index >= ordinaryCapacity
+        generated: true
       });
     }
   );
@@ -815,9 +817,7 @@ function foodTargets(
 
 function triggerFoodEaten(
   state: RunState,
-  target: PetInstance,
-  content: ContentBundle,
-  foodId: string
+  target: PetInstance
 ): void {
   const ordered = orderShopTriggers(
     state,
@@ -845,15 +845,21 @@ function triggerFoodEaten(
     for (const friend of friends) addPermanentStats(friend, seal.level, 0);
     state.shopRngState = rng.state;
   }
-  if (target.name === "Cow" && foodId === "chocolate") {
-    replaceShopFoodWithTwoMilk(
-      state,
-      content,
-      target.level,
-      "chocolate-milk"
-    );
-    addLog(state, "Cow 因食用 Chocolate 生成了两瓶 Chocolate Milk。");
-  }
+}
+
+function stockCowChocolateMilk(
+  state: RunState,
+  content: ContentBundle,
+  cow: PetInstance
+): void {
+  const milkLevel = xpToLevel(cow.xp + 1);
+  replaceShopFoodWithTwoMilk(
+    state,
+    content,
+    milkLevel,
+    "chocolate-milk"
+  );
+  addLog(state, "Cow 因食用 Chocolate 生成了两瓶 Chocolate Milk。");
 }
 
 function applyFoodEffect(
@@ -1168,8 +1174,11 @@ export function buyFood(
       triggerShopFaint(state, content, target, index);
       addLog(state, `Sleeping Pill 令 ${target.name} 退场。`);
     } else {
+      if (food.id === "chocolate" && target.name === "Cow") {
+        stockCowChocolateMilk(state, content, target);
+      }
       applyFoodEffect(state, content, offer, target);
-      triggerFoodEaten(state, target, content, food.id);
+      triggerFoodEaten(state, target);
     }
   }
   addLog(state, `${food.name} 已使用。`);
@@ -1285,15 +1294,29 @@ export function stockWormFood(
   content: ContentBundle,
   worm: PetInstance
 ): ShopFoodItem | null {
+  const capacity = state.shop.foods.length;
+  const generatedStart = Math.max(
+    0,
+    capacity - GENERATED_FOOD_SLOT_CAPACITY
+  );
   let slot = -1;
-  for (let index = state.shop.foods.length - 1; index >= 0; index--) {
+  for (let index = capacity - 1; index >= generatedStart; index--) {
     if (!state.shop.foods[index]) {
       slot = index;
       break;
     }
   }
   if (slot < 0) {
-    for (let index = state.shop.foods.length - 1; index >= 0; index--) {
+    for (let index = capacity - 1; index >= generatedStart; index--) {
+      const offer = state.shop.foods[index];
+      if (offer && !offer.frozen) {
+        slot = index;
+        break;
+      }
+    }
+  }
+  if (slot < 0) {
+    for (let index = generatedStart - 1; index >= 0; index--) {
       const offer = state.shop.foods[index];
       if (offer && !offer.frozen) {
         slot = index;
@@ -1446,7 +1469,11 @@ export function generateGhostTeam(
 export function endTurn(
   state: RunState,
   content: ContentBundle,
-  opponentTeam?: PetInstance[]
+  opponentTeam?: PetInstance[],
+  opponent?: {
+    kind: OpponentKind;
+    id?: string;
+  }
 ): EndTurnResult {
   if (state.phase !== "shop") return failure("当前不在商店阶段。");
   state.phase = "battle";
@@ -1468,6 +1495,10 @@ export function endTurn(
     turn: state.turn,
     seed: battleSeed,
     outcome: result.outcome,
+    opponentKind:
+      opponent?.kind ??
+      (opponentTeam === undefined ? "generated" : "snapshot"),
+    ...(opponent?.id ? { opponentId: opponent.id } : {}),
     playerTeam: structuredClone(playerSnapshot).map((pet) => ({
       ...pet,
       uid: `player:${pet.uid}`

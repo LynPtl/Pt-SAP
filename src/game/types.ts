@@ -2,6 +2,7 @@ export type PetLevel = 1 | 2 | 3;
 export type BattleSide = "player" | "enemy";
 export type RunPhase = "shop" | "battle" | "gameOver";
 export type BattleOutcome = "win" | "loss" | "draw";
+export type OpponentKind = "snapshot" | "generated";
 export type LevelUpCause = "merge" | "experience";
 export type LevelUpSuppressedReason = "level-3-merge";
 
@@ -212,6 +213,8 @@ export interface BattleReplayData {
   turn: number;
   seed: string;
   outcome: BattleOutcome;
+  opponentKind: OpponentKind;
+  opponentId?: string;
   playerTeam: PetInstance[];
   enemyTeam: PetInstance[];
   events: BattleEvent[];

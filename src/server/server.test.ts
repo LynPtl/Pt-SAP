@@ -91,6 +91,7 @@ test("web server serves UI and supports a session action", async (t) => {
     view: {
       state: {
         lastBattleReplay: {
+          opponentKind: string;
           playerTeam: Array<{ nameZh: string; ability: string }>;
           enemyTeam: Array<{ nameZh: string; ability: string }>;
           events: Array<{
@@ -112,6 +113,10 @@ test("web server serves UI and supports a session action", async (t) => {
   };
   assert.equal(endTurnData.ok, true);
   assert.ok(endTurnData.view.state.lastBattleReplay);
+  assert.equal(
+    endTurnData.view.state.lastBattleReplay.opponentKind,
+    "generated"
+  );
   assert.ok(endTurnData.view.state.lastBattleReplay.enemyTeam.length > 0);
   assert.match(
     endTurnData.view.state.lastBattleReplay.events[0].message,
@@ -119,6 +124,40 @@ test("web server serves UI and supports a session action", async (t) => {
   );
   assert.ok(
     endTurnData.view.state.lastBattleReplay.events[0].state.units.length > 0
+  );
+
+  const secondRun = await fetch(`${base}/api/new`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ seed: "second-player" })
+  });
+  assert.equal(secondRun.status, 200);
+  const secondCookie = secondRun.headers.get("set-cookie");
+  assert.ok(secondCookie);
+  const secondEndTurn = await fetch(`${base}/api/action`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: secondCookie.split(";")[0]
+    },
+    body: JSON.stringify({ type: "end" })
+  });
+  const secondEndData = (await secondEndTurn.json()) as {
+    ok: boolean;
+    view: {
+      state: {
+        lastBattleReplay: {
+          opponentKind: string;
+        } | null;
+      };
+    };
+  };
+  assert.equal(secondEndData.ok, true);
+  assert.equal(
+    secondEndData.view.state.lastBattleReplay?.opponentKind,
+    "snapshot"
   );
 });
 

@@ -903,25 +903,31 @@ function fillBattleTeam(container, team, side) {
   }
 }
 
+function opponentLabel(replay) {
+  return replay.opponentKind === "snapshot" ? "玩家幽灵" : "系统 Ghost";
+}
+
 function resetBattleTheater(replay) {
   clearTimeout(battleTimer);
   attackVisualToken++;
   battleCards.clear();
   battleStats.clear();
   refs.battleResult.className = "battle-result";
+  const opponent = opponentLabel(replay);
   refs.battleResult.textContent =
     game?.state.phase === "gameOver"
-      ? `第 ${replay.turn} 回合 · 本局最终战斗`
-      : `第 ${replay.turn} 回合 · 准备战斗`;
+      ? `第 ${replay.turn} 回合 · ${opponent} · 本局最终战斗`
+      : `第 ${replay.turn} 回合 · ${opponent} · 准备战斗`;
   refs.battleTitle.textContent =
     game?.state.phase === "gameOver"
-      ? `第 ${replay.turn} 回合 · 最终战斗`
-      : `第 ${replay.turn} 回合战斗回放`;
+      ? `第 ${replay.turn} 回合 · ${opponent} · 最终战斗`
+      : `第 ${replay.turn} 回合 · ${opponent} 战斗回放`;
   fillBattleTeam(refs.enemyBattleTeam, replay.enemyTeam, "enemy");
   fillBattleTeam(refs.playerBattleTeam, replay.playerTeam, "player");
   refs.attackEffect.textContent = "";
   refs.battleLog.replaceChildren();
-  refs.battleFeed.textContent = "战斗开始：观察双方出手顺序与目标。";
+  refs.battleFeed.textContent =
+    `对手来源：${opponent}。战斗开始：观察双方出手顺序与目标。`;
   refs.battleProgress.max = Math.max(1, replay.events.length);
   refs.battleProgress.value = 0;
   refs.battleStep.textContent = `0 / ${replay.events.length}`;

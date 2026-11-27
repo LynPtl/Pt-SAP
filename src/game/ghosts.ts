@@ -10,6 +10,12 @@ export interface GhostSnapshot {
   turn: number;
   wins: number;
   lives: number;
+  contentVersion: string;
+  team: PetInstance[];
+}
+
+export interface GhostSelection {
+  snapshot: GhostSnapshot;
   team: PetInstance[];
 }
 
@@ -18,8 +24,10 @@ interface GhostFile {
   snapshots: Array<Omit<GhostSnapshot, "lives"> & { lives?: number }>;
 }
 
-const GHOST_LIMIT = 1000;
+export const GHOST_LIMIT = 1000;
+export const GHOST_BUCKET_LIMIT = 64;
 const ghostQueues = new Map<string, Promise<void>>();
+export const GHOST_CONTENT_VERSION = "turtle-pack-2026-11-27";
 
 export async function withGhostLock<T>(
   filePath: string,
@@ -57,7 +65,8 @@ export async function loadGhosts(
       lives:
         typeof snapshot.lives === "number"
           ? snapshot.lives
-          : 0
+          : 0,
+      contentVersion: snapshot.contentVersion ?? GHOST_CONTENT_VERSION
     }));
   } catch (error) {
     const code =
@@ -90,9 +99,10 @@ export async function appendGhost(
     turn: snapshot.turn,
     wins: snapshot.wins,
     lives: snapshot.lives,
+    contentVersion: GHOST_CONTENT_VERSION,
     team: structuredClone(snapshot.team)
   });
-  const latest = existing.slice(-GHOST_LIMIT);
+  const latest = compactGhosts(existing);
   const file: GhostFile = { version: 1, snapshots: latest };
   await mkdir(path.dirname(resolved), { recursive: true });
   const temporary = `${resolved}.${process.pid}.tmp`;
@@ -100,16 +110,44 @@ export async function appendGhost(
   await rename(temporary, resolved);
 }
 
-export function chooseGhost(
+function compactGhosts(snapshots: GhostSnapshot[]): GhostSnapshot[] {
+  const byRunTurn = new Map<string, GhostSnapshot>();
+  for (const snapshot of snapshots) {
+    const runKey = snapshot.runId ?? snapshot.runSeed;
+    byRunTurn.set(`${runKey}:${snapshot.turn}`, snapshot);
+  }
+
+  const buckets = new Map<string, GhostSnapshot[]>();
+  for (const snapshot of byRunTurn.values()) {
+    const bucket = `${snapshot.turn}:${snapshot.wins}:${snapshot.lives}`;
+    const entries = buckets.get(bucket) ?? [];
+    entries.push(snapshot);
+    buckets.set(bucket, entries);
+  }
+
+  const retained = new Set<GhostSnapshot>();
+  for (const entries of buckets.values()) {
+    for (const snapshot of entries.slice(-GHOST_BUCKET_LIMIT)) {
+      retained.add(snapshot);
+    }
+  }
+  return [...byRunTurn.values()]
+    .filter((snapshot) => retained.has(snapshot))
+    .slice(-GHOST_LIMIT);
+}
+
+export function selectGhost(
   state: RunState,
   snapshots: GhostSnapshot[],
   currentRunId?: string
-): PetInstance[] | null {
+): GhostSelection | null {
   const candidates = snapshots.filter(
     (snapshot) =>
       (snapshot.runId
         ? snapshot.runId !== currentRunId
         : snapshot.runSeed !== state.seed) &&
+      (snapshot.contentVersion ?? GHOST_CONTENT_VERSION) ===
+        GHOST_CONTENT_VERSION &&
       snapshot.turn === state.turn &&
       snapshot.wins === state.wins &&
       snapshot.team.length > 0
@@ -122,7 +160,20 @@ export function chooseGhost(
     deriveSeed(state.seed, "ghost", state.turn, state.wins)
   );
   const selected = rng.pick(closeLives.length ? closeLives : candidates);
-  return selected ? structuredClone(selected.team) : null;
+  return selected
+    ? {
+        snapshot: structuredClone(selected),
+        team: structuredClone(selected.team)
+      }
+    : null;
+}
+
+export function chooseGhost(
+  state: RunState,
+  snapshots: GhostSnapshot[],
+  currentRunId?: string
+): PetInstance[] | null {
+  return selectGhost(state, snapshots, currentRunId)?.team ?? null;
 }
 
 function isGhostFile(value: unknown): value is GhostFile {

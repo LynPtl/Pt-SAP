@@ -8,7 +8,9 @@ import { loadContent } from "./content.js";
 import {
   appendGhost,
   chooseGhost,
+  GHOST_CONTENT_VERSION,
   loadGhosts,
+  selectGhost,
   withGhostLock
 } from "./ghosts.js";
 import { loadRun, saveRun } from "./persistence.js";
@@ -371,6 +373,23 @@ test("a complete turn produces a battle result and advances or ends the run", ()
       state.phase === "gameOver"
   );
   assert.ok(state.log.some((line) => line.startsWith("[战斗]")));
+  assert.equal(state.lastBattleReplay?.opponentKind, "generated");
+});
+
+test("battle replay records a selected player ghost snapshot", () => {
+  const state = createRun("snapshot-replay", content);
+  state.team = [pet("Ant", "player-ant")];
+  const enemyTeam = [pet("Pig", "enemy-pig")];
+
+  assert.equal(
+    endTurn(state, content, enemyTeam, {
+      kind: "snapshot",
+      id: "ghost-snapshot-1"
+    }).ok,
+    true
+  );
+  assert.equal(state.lastBattleReplay?.opponentKind, "snapshot");
+  assert.equal(state.lastBattleReplay?.opponentId, "ghost-snapshot-1");
 });
 
 test("the tenth Arena victory ends the run as a win", () => {
@@ -507,8 +526,81 @@ test("Cow replaces food capacity with two free level-scaled Milks", () => {
   assert.equal(milks.length, 2);
   assert.ok(milks.every((offer) => offer?.cost === 0));
   assert.ok(milks.every((offer) => offer?.milkLevel === 1));
-  assert.equal(state.shop.foods[0]?.generated, false);
+  assert.ok(milks.every((offer) => offer?.generated));
+  assert.equal(state.shop.foods[0], null);
   assert.equal(state.shop.foods[1]?.generated, true);
+  assert.equal(state.shop.foods[2]?.generated, true);
+});
+
+test("Cow Milk occupies the two right-most food slots at higher tiers", () => {
+  const state = createRun("cow-milk-tier-5", content);
+  const cow = content.petsByTitle.get("Cow");
+  assert.ok(cow);
+  state.shopTier = 5;
+  state.gold = 100;
+  state.shop.foods = [
+    foodOffer("apple"),
+    foodOffer("honey"),
+    foodOffer("pear"),
+    null
+  ];
+  state.shop.pets[0] = {
+    kind: "pet",
+    itemId: "cow-tier-five-offer",
+    templateId: cow.id,
+    cost: 3,
+    attackBonus: 0,
+    healthBonus: 0,
+    rewardGroup: null,
+    frozen: false,
+    reward: false
+  };
+
+  assert.equal(buyPet(state, content, 0).ok, true);
+  assert.equal(state.shop.foods[0], null);
+  assert.equal(state.shop.foods[1], null);
+  assert.equal(state.shop.foods[2]?.templateId, "milk");
+  assert.equal(state.shop.foods[3]?.templateId, "milk");
+  assert.ok(state.shop.foods[2]?.generated);
+  assert.ok(state.shop.foods[3]?.generated);
+});
+
+test("Buying a Cow that levels up stocks Milk after the reward pair", () => {
+  const state = createRun("cow-level-up-order", content);
+  const cow = content.petsByTitle.get("Cow");
+  assert.ok(cow);
+  const target = pet("Cow", "cow-level-target");
+  target.xp = 1;
+  state.team = [target];
+  state.gold = 100;
+  state.shop.pets[0] = {
+    kind: "pet",
+    itemId: "cow-level-up-offer",
+    templateId: cow.id,
+    cost: 3,
+    attackBonus: 0,
+    healthBonus: 0,
+    rewardGroup: null,
+    frozen: false,
+    reward: false
+  };
+
+  assert.equal(buyPet(state, content, 0).ok, true);
+  assert.equal(target.level, 2);
+  assert.equal(state.shop.rewardPets.length, 2);
+  const milks = state.shop.foods.filter(
+    (offer) => offer?.templateId === "milk"
+  );
+  assert.equal(milks.length, 2);
+  assert.ok(milks.every((offer) => offer?.milkLevel === 2));
+  const rewardLog = state.log.findIndex((line) =>
+    line.includes("level-up reward choice")
+  );
+  const milkLog = state.log.findIndex((line) =>
+    line.includes("Cow 用")
+  );
+  assert.ok(rewardLog >= 0);
+  assert.ok(milkLog > rewardLog);
 });
 
 test("Cow eating Chocolate creates two free attack-only Chocolate Milks", () => {
@@ -525,10 +617,40 @@ test("Cow eating Chocolate creates two free attack-only Chocolate Milks", () => 
   assert.equal(chocolateMilk.length, 2);
   assert.ok(chocolateMilk.every((offer) => offer?.cost === 0));
   assert.ok(chocolateMilk.every((offer) => offer?.milkLevel === 2));
+  assert.ok(chocolateMilk.every((offer) => offer?.generated));
+  assert.equal(state.shop.foods[0], null);
   const beforeAttack = cow.attack;
-  state.shop.foods[0] = chocolateMilk[0]!;
-  assert.equal(buyFood(state, content, 0, cow.uid).ok, true);
+  const milkSlot = state.shop.foods.findIndex(
+    (offer) => offer?.itemId === chocolateMilk[0]?.itemId
+  );
+  assert.equal(buyFood(state, content, milkSlot, cow.uid).ok, true);
   assert.equal(cow.attack, beforeAttack + 2);
+});
+
+test("Chocolate Milk is stocked before a Cow level-up reward", () => {
+  const state = createRun("cow-chocolate-level-up", content);
+  const cow = pet("Cow", "cow-chocolate-level-up", 2);
+  cow.xp = 4;
+  state.team = [cow];
+  state.shop.foods[0] = foodOffer("chocolate");
+
+  assert.equal(buyFood(state, content, 0, cow.uid).ok, true);
+  assert.equal(cow.level, 3);
+  assert.equal(state.shop.rewardPets.length, 2);
+  const chocolateMilk = state.shop.foods.filter(
+    (offer) => offer?.templateId === "chocolate-milk"
+  );
+  assert.equal(chocolateMilk.length, 2);
+  assert.ok(chocolateMilk.every((offer) => offer?.milkLevel === 3));
+
+  const milkLog = state.log.findIndex((line) =>
+    line.includes("Chocolate Milk")
+  );
+  const rewardLog = state.log.findIndex((line) =>
+    line.includes("level-up reward choice")
+  );
+  assert.ok(milkLog >= 0);
+  assert.ok(rewardLog > milkLog);
 });
 
 test("Duck only buffs pets currently displayed in the shop", () => {
@@ -768,6 +890,7 @@ test("ghost selection returns a clone of another run's snapshot", () => {
       turn: state.turn,
       wins: state.wins,
       lives: state.lives,
+      contentVersion: GHOST_CONTENT_VERSION,
       team: ghostTeam
     }
   ]);
@@ -775,6 +898,18 @@ test("ghost selection returns a clone of another run's snapshot", () => {
   assert.notEqual(selected, ghostTeam);
   if (selected) selected[0].attack = 99;
   assert.equal(ghostTeam[0].attack, 2);
+  const selection = selectGhost(state, [
+    {
+      id: "ghost-with-metadata",
+      runSeed: "ghost-source",
+      turn: state.turn,
+      wins: state.wins,
+      lives: state.lives,
+      contentVersion: GHOST_CONTENT_VERSION,
+      team: ghostTeam
+    }
+  ]);
+  assert.equal(selection?.snapshot.id, "ghost-with-metadata");
 });
 
 test("ghost runId distinguishes same-seed runs and excludes the current run", () => {
@@ -790,6 +925,7 @@ test("ghost runId distinguishes same-seed runs and excludes the current run", ()
         turn: state.turn,
         wins: state.wins,
         lives: state.lives,
+        contentVersion: GHOST_CONTENT_VERSION,
         team
       }
     ],
@@ -806,12 +942,29 @@ test("ghost runId distinguishes same-seed runs and excludes the current run", ()
         turn: state.turn,
         wins: state.wins,
         lives: state.lives,
+        contentVersion: GHOST_CONTENT_VERSION,
         team
       }
     ],
     "current-run"
   );
   assert.equal(currentRun, null);
+});
+
+test("ghost selection rejects snapshots from another content version", () => {
+  const state = createRun("ghost-content-version", content);
+  const selected = chooseGhost(state, [
+    {
+      id: "old-content",
+      runSeed: "old-run",
+      turn: state.turn,
+      wins: state.wins,
+      lives: state.lives,
+      contentVersion: "old-content-version",
+      team: [pet("Ant", "old-ant")]
+    }
+  ]);
+  assert.equal(selected, null);
 });
 
 test("Ghost fallback follows SAP turn and action-point design", () => {
@@ -895,6 +1048,42 @@ test("serialized ghost writes do not lose concurrent snapshots", async () => {
       )
     );
     assert.equal((await loadGhosts(ghostPath)).length, 8);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("ghost snapshots deduplicate the same run and turn", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "pt-sap-ghost-dedupe-"));
+  try {
+    const state = createRun("ghost-dedupe", content);
+    const ghostPath = path.join(directory, "ghosts.json");
+    await appendGhost(
+      state,
+      {
+        turn: 1,
+        wins: 0,
+        lives: 5,
+        runId: "same-run",
+        team: [pet("Ant", "old-ant")]
+      },
+      ghostPath
+    );
+    await appendGhost(
+      state,
+      {
+        turn: 1,
+        wins: 0,
+        lives: 5,
+        runId: "same-run",
+        team: [pet("Cricket", "new-cricket")]
+      },
+      ghostPath
+    );
+
+    const ghosts = await loadGhosts(ghostPath);
+    assert.equal(ghosts.length, 1);
+    assert.equal(ghosts[0].team[0].name, "Cricket");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

@@ -9,12 +9,6 @@ import {
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadContent } from "../game/content.js";
-import {
-  appendGhost,
-  chooseGhost,
-  loadGhosts,
-  withGhostLock
-} from "../game/ghosts.js";
 import { battleLogLineZh } from "../game/localization.js";
 import {
   buyFood,
@@ -32,6 +26,11 @@ import type {
   EndTurnResult
 } from "../game/run.js";
 import type { ContentBundle, RunState } from "../game/types.js";
+import {
+  createPostgresGhostPool,
+  FileGhostPool,
+  type GhostPool
+} from "./ghostStore.js";
 import { SessionStore } from "./sessionStore.js";
 import { buildWebView } from "./view.js";
 
@@ -43,6 +42,8 @@ const COOKIE_NAME = "pt_sap_session";
 interface WebServerOptions {
   sessionDir?: string;
   ghostPath?: string;
+  databaseUrl?: string;
+  ghostPool?: GhostPool;
   webDir?: string;
   secureCookie?: boolean;
   basicAuth?: {
@@ -75,14 +76,30 @@ export async function createWebServer(
     options.sessionDir ?? DEFAULT_SESSION_DIR
   );
   const ghostPath = path.resolve(options.ghostPath ?? DEFAULT_GHOST_PATH);
+  const databaseUrl = options.databaseUrl ?? process.env.DATABASE_URL;
+  const ghostPool =
+    options.ghostPool ??
+    (databaseUrl && options.ghostPath === undefined
+      ? await createPostgresGhostPool(databaseUrl)
+      : new FileGhostPool(ghostPath));
   const assets = await loadStaticAssets(webDir);
 
-  return createHttpServer(async (request, response) => {
+  const server = createHttpServer(async (request, response) => {
     setSecurityHeaders(response);
     try {
       const url = new URL(request.url ?? "/", "http://localhost");
       if (request.method === "GET" && url.pathname === "/healthz") {
-        sendText(response, 200, "ok\n", "text/plain; charset=utf-8");
+        try {
+          await ghostPool.healthCheck();
+          sendText(response, 200, "ok\n", "text/plain; charset=utf-8");
+        } catch {
+          sendText(
+            response,
+            503,
+            "ghost store unavailable\n",
+            "text/plain; charset=utf-8"
+          );
+        }
         return;
       }
       if (
@@ -159,7 +176,7 @@ export async function createWebServer(
               state,
               content,
               body,
-              ghostPath,
+              ghostPool,
               resolved.sessionId
             );
             if (result.ok) {
@@ -197,13 +214,17 @@ export async function createWebServer(
       sendJson(response, status, { ok: false, error: message });
     }
   });
+  server.on("close", () => {
+    void ghostPool.close();
+  });
+  return server;
 }
 
 function applyAction(
   state: RunState,
   content: ContentBundle,
   body: ActionBody,
-  ghostPath: string,
+  ghostPool: GhostPool,
   sessionId: string
 ): Promise<ActionResult | EndTurnResult> {
   switch (body.type) {
@@ -255,7 +276,7 @@ function applyAction(
     case "roll":
       return Promise.resolve(refreshShop(state, content, true));
     case "end":
-      return endTurnWithGhost(state, content, ghostPath, sessionId);
+      return endTurnWithGhost(state, content, ghostPool, sessionId);
     default:
       throw new Error("Unknown action");
   }
@@ -264,41 +285,40 @@ function applyAction(
 async function endTurnWithGhost(
   state: RunState,
   content: ContentBundle,
-  ghostPath: string,
+  ghostPool: GhostPool,
   sessionId: string
 ): Promise<EndTurnResult> {
-  return withGhostLock(ghostPath, async () => {
-    const battleTurn = state.turn;
-    const battleWins = state.wins;
-    const battleLives = state.lives;
-    let ghosts: Awaited<ReturnType<typeof loadGhosts>> = [];
+  const battleTurn = state.turn;
+  const battleWins = state.wins;
+  const battleLives = state.lives;
+  let ghost: Awaited<ReturnType<GhostPool["select"]>> = null;
+  try {
+    ghost = await ghostPool.select(state, sessionId);
+  } catch (error) {
+    console.warn("Could not load ghosts; using bot opponent.", error);
+  }
+  const result = endTurn(
+    state,
+    content,
+    ghost?.team,
+    ghost
+      ? { kind: "snapshot", id: ghost.snapshot.id }
+      : { kind: "generated" }
+  );
+  if (result.playerSnapshot) {
     try {
-      ghosts = await loadGhosts(ghostPath);
+      await ghostPool.append(state, {
+        turn: battleTurn,
+        wins: battleWins,
+        lives: battleLives,
+        runId: sessionId,
+        team: result.playerSnapshot
+      });
     } catch (error) {
-      console.warn("Could not load ghosts; using bot opponent.", error);
+      console.warn("Could not save ghost snapshot.", error);
     }
-    const ghostTeam =
-      chooseGhost(state, ghosts, sessionId) ?? undefined;
-    const result = endTurn(state, content, ghostTeam);
-    if (result.playerSnapshot) {
-      try {
-        await appendGhost(
-          state,
-          {
-            turn: battleTurn,
-            wins: battleWins,
-            lives: battleLives,
-            runId: sessionId,
-            team: result.playerSnapshot
-          },
-          ghostPath
-        );
-      } catch (error) {
-        console.warn("Could not save ghost snapshot.", error);
-      }
-    }
-    return result;
-  });
+  }
+  return result;
 }
 
 async function resolveSession(

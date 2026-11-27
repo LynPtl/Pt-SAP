@@ -1,4 +1,19 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: "${PT_SAP_PG_DB:-pt_sap}"
+      POSTGRES_USER: "${PT_SAP_PG_USER:-pt_sap}"
+      POSTGRES_PASSWORD: "${PT_SAP_PG_PASSWORD:-pt_sap}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PT_SAP_PG_USER:-pt_sap} -d ${PT_SAP_PG_DB:-pt_sap}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
   pt-sap:
     build:
       context: .
@@ -11,8 +26,12 @@ services:
     environment:
       PORT: "3000"
       HOST: "0.0.0.0"
+      DATABASE_URL: "${PT_SAP_DATABASE_URL:-postgres://pt_sap:pt_sap@postgres:5432/pt_sap}"
       PT_SAP_SECURE_COOKIE: "${PT_SAP_SECURE_COOKIE:-0}"
       PT_SAP_BASIC_AUTH: "${PT_SAP_BASIC_AUTH:-}"
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./reference:/app/reference:ro
       - pt-sap-saves:/app/saves
@@ -36,3 +55,4 @@ services:
 
 volumes:
   pt-sap-saves:
+  postgres-data:

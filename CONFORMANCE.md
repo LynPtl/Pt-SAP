@@ -13,8 +13,8 @@
 
 ## 目标版本
 
-当前绑定的是 **2026-11-27 时公开的 Turtle Pack Normal 规则**，还没有绑定
-具体游戏构建哈希。要证明完全一致，下一步必须补充：
+当前绑定的是 **2026-11-27 时公开的 Turtle Pack Normal 规则**；Wiki 最后记录的
+公开版本为 **0.48（2026-05-21）**。还没有绑定具体客户端构建哈希，下一步必须补充：
 
 - 平台和游戏版本；
 - 内容清单哈希；
@@ -31,9 +31,9 @@
 | 10 金 | 已对齐 | A | `run.ts` | 无 |
 | 商店宠物槽 3/3/4/4/5/5 | 已对齐 | B | `petShopCapacity` | 无 |
 | 普通食物槽 1/1/2/2/2/2 | 已对齐 | B | `ordinaryFoodShopCapacity` | 无 |
-| 2 个生成食物槽 | 已对齐容量 | B | `ShopState.foods` | 生成、冻结、替换顺序仍需 Oracle |
-| Worm 生成 Apple | 已补空槽与满槽替换 | B | `stockWormFood` | 满槽多源冲突仍需 Oracle |
-| Cow Milk / Chocolate Milk | 已补 | B | `replaceShopFoodWithTwoMilk` | 与升级奖励的精确占位待 Oracle |
+| 2 个生成食物槽 | 已对齐容量与右侧位置 | A/B | `ShopState.foods` | 冻结、满槽多源冲突仍需 Oracle |
+| Worm 生成 Apple | 优先最右生成槽 | A/B | `stockWormFood` | 多 Worm 与全冻结边界待 Oracle |
+| Cow Milk / Chocolate Milk | 最右两格并补触发顺序 | A/B | `replaceShopFoodWithTwoMilk` | 跨奖励对象的像素级占位待 Oracle |
 | 3 金基础价格 | 已对齐 | A | `content.ts` | 特殊价格需逐项维护 |
 | 刷新 1 金、冻结免费 | 已对齐 | A | `run.ts` | 冻结排序细节待验证 |
 | 出售价值等于等级 | 已对齐 | A/B | `sellValueForPet` | 特殊修正需逐项测试 |
@@ -53,9 +53,11 @@
 | Ghost 第 1 回合 3 宠 | 已对齐 | A | `generateGhostTeam` | 隐藏选宠顺序待补 |
 | Ghost 第 2 回合起 5 宠 | 已对齐 | A | `generateGhostTeam` | — |
 | Ghost 行动点 1/2/4/6 | 已对齐数量 | A | `ghostActionPointsForTurn` | 类型选择概率和顺序待 Oracle |
-| 幽灵匹配同回合/同胜场 | 已对齐过滤 | A | `chooseGhost` | 生命接近的精确阈值待补 |
-| 共享幽灵文件并发 | 已串行化 | B | `withGhostLock` | 多进程仍需 PostgreSQL |
-| 真实多人异步池 | 未实现 | — | 本地 `ghosts.json` | 需要服务器数据库 |
+| 幽灵匹配同回合/同胜场 | 已对齐过滤 | A | `selectGhost` | 生命接近的精确阈值待补 |
+| 战斗回放对手来源 | 已记录真实快照/系统 Ghost | A | `BattleReplayData` | 无 |
+| 共享幽灵文件并发 | 已串行化并去重分桶 | B | `withGhostLock` / `compactGhosts` | 仍是单进程回退 |
+| 共享 Ghost 池 | 已实现 JSON + PostgreSQL | A/B | `FileGhostPool` / `PostgresGhostPool` | 需继续做同版本实机压力测试 |
+| 真实多人异步池 | 已支持共享快照 | B | `ghost_snapshots` | 需要继续加账户/对局事务 |
 | Arena Easy/Hard | 未实现 | — | Normal only | 不在当前范围 |
 | Versus/With Friends | 未实现 | — | — | 不在当前范围 |
 | 成就/收藏/红丝带持久化 | 展示层部分 | A | 胜利结算 | 没有账户级收藏 |

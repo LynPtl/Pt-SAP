@@ -84,6 +84,9 @@ function migrateRunState(
   ) {
     state.lastBattleReplay = null;
   }
+  if (state.lastBattleReplay) {
+    state.lastBattleReplay.opponentKind ??= "generated";
+  }
   state.version = 2;
   return state as RunState;
 }
