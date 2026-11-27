@@ -250,11 +250,15 @@ function showLevelUpFeedback(leveledPets, petsBefore) {
         const stats = record
           ? `攻 ${signed(record.attackGained)} / 命 ${signed(record.healthGained)}`
           : "技能已强化";
-        const reward = record?.rewardTier
-          ? ` · ${record.rewardTier} 阶升级候选`
-          : record?.rewardSuppressed
-            ? " · 满级合并不提供候选"
-            : "";
+        const rewardGroups = record?.rewardGroups ?? [];
+        const reward =
+          rewardGroups.length > 1
+            ? ` · ${rewardGroups.length} 组升级候选`
+            : rewardGroups[0]
+              ? ` · ${rewardGroups[0].tier} 阶升级候选`
+              : record?.rewardSuppressed
+                ? " · 满级合并不提供候选"
+                : "";
         return `${pet.nameZh} Lv.${before?.level ?? "?"} → Lv.${pet.level} · ${stats}${reward}`;
       }
     )
@@ -363,17 +367,24 @@ function renderLevelUpSummary() {
   refs.levelUpSummary.append(el("strong", "level-up-summary-title", "本回合升级"));
   const list = el("div", "level-up-summary-list");
   for (const record of records) {
-    const reward = record.rewardTier
-      ? `${record.rewardTier} 阶升级候选，二选一`
-      : record.rewardSuppressed
-        ? "两只 2 级合并满级，本次不提供候选"
-        : "本次没有升级候选";
+    const rewardGroups = record.rewardGroups ?? [];
+    const reward =
+      rewardGroups.length > 1
+        ? `${rewardGroups.length} 组升级候选，每组二选一`
+        : rewardGroups[0]
+          ? `${rewardGroups[0].tier} 阶升级候选，二选一`
+          : record.rewardSuppressed
+            ? "两只 2 级合并满级，本次不提供候选"
+            : "本次没有升级候选";
+    const levelUps =
+      (record.levelUps ?? 1) > 1 ? ` · 连续升 ${record.levelUps} 级` : "";
     list.append(
       el(
         "div",
         "level-up-summary-item",
         `${record.nameZh} Lv.${record.fromLevel} → Lv.${record.toLevel} · ` +
-          `攻 ${signed(record.attackGained)} / 命 ${signed(record.healthGained)} · ${reward}`
+          `攻 ${signed(record.attackGained)} / 命 ${signed(record.healthGained)}` +
+          `${levelUps} · ${reward}`
       )
     );
   }

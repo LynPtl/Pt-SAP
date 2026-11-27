@@ -178,8 +178,13 @@ export interface LevelUpView {
   attackGained: number;
   healthGained: number;
   cause: RunState["levelUps"][number]["cause"];
+  levelUps: number;
   rewardGroup: string | null;
   rewardTier: number | null;
+  rewardGroups: Array<{
+    groupId: string;
+    tier: number;
+  }>;
   rewardSuppressed: RunState["levelUps"][number]["rewardSuppressed"];
 }
 
@@ -446,8 +451,14 @@ function levelUpsView(state: RunState): LevelUpView[] {
     attackGained: record.attackGained,
     healthGained: record.healthGained,
     cause: record.cause,
+    levelUps: record.levelUps ?? Math.max(1, record.toLevel - record.fromLevel),
     rewardGroup: record.rewardGroup,
     rewardTier: record.rewardTier,
+    rewardGroups:
+      record.rewardGroups ??
+      (record.rewardGroup && record.rewardTier
+        ? [{ groupId: record.rewardGroup, tier: record.rewardTier }]
+        : []),
     rewardSuppressed: record.rewardSuppressed
   }));
 }
@@ -463,7 +474,12 @@ function rewardGroupsView(
     if (!template) return;
     const groupId = offer.rewardGroup ?? `single-${rewardIndex}`;
     const sourceRecord = offer.rewardGroup
-      ? levelUps.find((record) => record.rewardGroup === offer.rewardGroup)
+      ? levelUps.find(
+          (record) =>
+            record.rewardGroups?.some(
+              (reward) => reward.groupId === offer.rewardGroup
+            ) || record.rewardGroup === offer.rewardGroup
+        )
       : null;
     const group = groups.get(groupId) ?? {
       groupId,

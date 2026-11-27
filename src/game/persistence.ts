@@ -76,6 +76,13 @@ function migrateRunState(
     offer.rewardGroup ??= null;
   });
   state.levelUps ??= [];
+  state.levelUps.forEach((record) => {
+    record.levelUps ??= Math.max(1, record.toLevel - record.fromLevel);
+    record.rewardGroups ??=
+      record.rewardGroup && record.rewardTier
+        ? [{ groupId: record.rewardGroup, tier: record.rewardTier }]
+        : [];
+  });
   state.lastBattleReplay ??= null;
   if (
     state.lastBattleReplay?.events.some(

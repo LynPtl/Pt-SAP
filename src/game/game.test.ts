@@ -363,6 +363,28 @@ test("merging two level 2 pets to level 3 suppresses the reward pair", () => {
   assert.equal(state.levelUps[0].rewardSuppressed, "level-3-merge");
 });
 
+test("a level 1 to level 3 jump counts as two upgrades and two reward groups", () => {
+  const state = createRun("multi-level-jump", content);
+  const target = pet("Ant", "jump-target");
+  target.xp = 1;
+  const source = pet("Ant", "jump-source", 3);
+  state.team = [target, source];
+
+  assert.equal(
+    mergeTeamPets(state, content, source.uid, target.uid).ok,
+    true
+  );
+  assert.equal(target.level, 3);
+  assert.equal(state.levelUps.length, 1);
+  assert.equal(state.levelUps[0].levelUps, 2);
+  assert.equal(state.levelUps[0].rewardGroups.length, 2);
+  assert.equal(state.shop.rewardPets.length, 4);
+  assert.equal(
+    new Set(state.shop.rewardPets.map((offer) => offer.rewardGroup)).size,
+    2
+  );
+});
+
 test("a complete turn produces a battle result and advances or ends the run", () => {
   const state = createRun("turn-test", content);
   state.team = [pet("Ant", "team-ant"), pet("Cricket", "team-cricket")];
@@ -797,6 +819,68 @@ test("Sleeping Pill summons Sheep rams only when team slots are available", () =
   const ram = state.team.find((entry) => entry.name === "Ram");
   assert.ok(ram);
   assert.equal(ram.level, 3);
+});
+
+test("shop-phase Hedgehog and Badger damage resolve before nested faints", () => {
+  const hedgehogState = createRun("pill-hedgehog-damage", content);
+  const hedgehog = customPet("Hedgehog", "hedgehog-damage", 2, 2);
+  const hedgehogFriend = customPet("Pig", "hedgehog-friend", 1, 4);
+  hedgehogState.team = [hedgehog, hedgehogFriend];
+  hedgehogState.shop.foods = [foodOffer("sleeping-pill")];
+  assert.equal(
+    buyFood(hedgehogState, content, 0, hedgehog.uid).ok,
+    true
+  );
+  assert.equal(hedgehogFriend.health, 2);
+
+  const badgerState = createRun("pill-badger-damage", content);
+  const badger = customPet("Badger", "badger-damage", 10, 2);
+  const left = customPet("Pig", "badger-left", 1, 10);
+  const right = customPet("Pig", "badger-right", 1, 10);
+  badgerState.team = [left, badger, right];
+  badgerState.shop.foods = [foodOffer("sleeping-pill")];
+  assert.equal(buyFood(badgerState, content, 0, badger.uid).ok, true);
+  assert.equal(left.health, 5);
+  assert.equal(right.health, 5);
+});
+
+test("shop-phase friend-faint triggers resolve Ox, Shark and Fly", () => {
+  const oxState = createRun("pill-ox", content);
+  const ox = pet("Ox", "ox-friend-faint");
+  const ahead = pet("Pig", "ox-ahead");
+  oxState.team = [ahead, ox];
+  oxState.shop.foods = [foodOffer("sleeping-pill")];
+  assert.equal(buyFood(oxState, content, 0, ahead.uid).ok, true);
+  assert.equal(ox.attack, 2);
+  assert.ok(ox.perks.some((perk) => perk.id === "melon"));
+
+  const sharkState = createRun("pill-shark", content);
+  const shark = pet("Shark", "shark-friend-faint");
+  const sharkFriend = pet("Pig", "shark-friend");
+  const sharkAttack = shark.attack;
+  const sharkHealth = shark.health;
+  sharkState.team = [sharkFriend, shark];
+  sharkState.shop.foods = [foodOffer("sleeping-pill")];
+  assert.equal(
+    buyFood(sharkState, content, 0, sharkFriend.uid).ok,
+    true
+  );
+  assert.equal(shark.attack, sharkAttack + 2);
+  assert.equal(shark.health, sharkHealth + 2);
+
+  const flyState = createRun("pill-fly", content);
+  const fly = pet("Fly", "fly-friend-faint");
+  const flyFriend = pet("Pig", "fly-friend");
+  flyState.team = [flyFriend, fly];
+  flyState.shop.foods = [foodOffer("sleeping-pill")];
+  assert.equal(
+    buyFood(flyState, content, 0, flyFriend.uid).ok,
+    true
+  );
+  assert.equal(
+    flyState.team.filter((entry) => entry.name === "Zombie Fly").length,
+    1
+  );
 });
 
 test("Sleeping Pill can resolve every Turtle Pack faint pet without throwing", () => {

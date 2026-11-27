@@ -85,8 +85,13 @@ export interface LevelUpRecord {
   attackGained: number;
   healthGained: number;
   cause: LevelUpCause;
+  levelUps: number;
   rewardGroup: string | null;
   rewardTier: 1 | 2 | 3 | 4 | 5 | 6 | null;
+  rewardGroups: Array<{
+    groupId: string;
+    tier: 1 | 2 | 3 | 4 | 5 | 6;
+  }>;
   rewardSuppressed: LevelUpSuppressedReason | null;
 }
 

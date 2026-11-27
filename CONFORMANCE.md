@@ -37,7 +37,7 @@
 | 3 金基础价格 | 已对齐 | A | `content.ts` | 特殊价格需逐项维护 |
 | 刷新 1 金、冻结免费 | 已对齐 | A | `run.ts` | 冻结排序细节待验证 |
 | 出售价值等于等级 | 已对齐 | A/B | `sellValueForPet` | 特殊修正需逐项测试 |
-| 2/3 XP 升级 | 已补巧克力 Lv.2→3 奖励边界 | A/B | `gainExperience` | 多级跳跃仍待 Oracle |
+| 2/3 XP 升级 | 已补巧克力 Lv.2→3 与 Lv.1→3 双升级 | A | `gainExperience` / `completeLevelUp` | 无 |
 | 升级二选一 | 已补来源记录与 UI 归属 | A/B | `levelUps` / `rewardPets` | 满槽和复杂生成物占位待 Oracle |
 | 单 Perk | 已对齐 | A | `pet.perks` | 复杂覆盖/合并边界待补 |
 | 攻击者攻击力优先触发 | 已对齐 | B | `orderByOwnerAttack` | — |
@@ -49,7 +49,7 @@
 | Tiger 重复技能 | 主路径已实现 | B/C | `extraAbilities` | 有限次数、链式 Tiger、复制记忆待补 |
 | Parrot 复制技能 | 主路径已实现 | B/C | `copiedAbility` | 复制链、升级与清理边界待补 |
 | Badger 相邻目标 | 近似 | C | 位置差 1 目标 | 目标集合需实机 Oracle |
-| 商店阶段 Faint | 部分 | B/C | `triggerShopFaint` | 伤害、嵌套死亡、Rat 等未完全覆盖 |
+| 商店阶段 Faint | 主路径已补伤害/召唤/朋友倒下 | B | `triggerShopFaint` | Rat 对手侧目标与极端嵌套顺序待 Oracle |
 | Ghost 第 1 回合 3 宠 | 已对齐 | A | `generateGhostTeam` | 隐藏选宠顺序待补 |
 | Ghost 第 2 回合起 5 宠 | 已对齐 | A | `generateGhostTeam` | — |
 | Ghost 行动点 1/2/4/6 | 已对齐数量 | A | `ghostActionPointsForTurn` | 类型选择概率和顺序待 Oracle |

@@ -474,6 +474,15 @@ function localizeBattleBody(line: string): string {
   if (fixed[body]) return fixed[body];
 
   let match = body.match(
+    /^(.+) gains (\d+) level-ups?; receives (\d+) tier ([\d/]+) level-up reward choices?\.$/
+  );
+  if (match) {
+    return (
+      `${match[1]} 获得 ${match[2]} 次升级，` +
+      `获得 ${match[4]} 阶升级候选（${match[3]} 组）。`
+    );
+  }
+  match = body.match(
     /^(.+) levels up to (\d) and receives a tier (\d) level-up reward choice\.$/
   );
   if (match) {

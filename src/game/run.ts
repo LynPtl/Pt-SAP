@@ -310,7 +310,21 @@ function completeLevelUp(
   allowReward: boolean,
   suppressedReason: LevelUpRecord["rewardSuppressed"] = null
 ): void {
-  const reward = allowReward ? addRewardPets(state, content) : null;
+  const levelUps = pet.level - fromLevel;
+  const rewardGroups: RewardGroupInfo[] = [];
+  for (let level = fromLevel + 1; level <= pet.level; level++) {
+    if (allowReward) {
+      const reward = addRewardPets(state, content);
+      if (reward) rewardGroups.push(reward);
+    }
+    triggerLevelUpAbilities(
+      state,
+      content,
+      pet,
+      level as PetLevel
+    );
+  }
+  const firstReward = rewardGroups[0] ?? null;
   const record: LevelUpRecord = {
     petUid: pet.uid,
     petName: pet.name,
@@ -320,16 +334,22 @@ function completeLevelUp(
     attackGained: pet.attack - attackBefore,
     healthGained: pet.health - healthBefore,
     cause,
-    rewardGroup: reward?.groupId ?? null,
-    rewardTier: reward?.tier ?? null,
+    levelUps,
+    rewardGroup: firstReward?.groupId ?? null,
+    rewardTier: firstReward?.tier ?? null,
+    rewardGroups,
     rewardSuppressed: suppressedReason
   };
   state.levelUps.push(record);
 
-  if (reward) {
+  if (rewardGroups.length > 0) {
+    const tiers = [...new Set(rewardGroups.map((reward) => reward.tier))].join(
+      "/"
+    );
     addLog(
       state,
-      `${pet.name} levels up to ${pet.level} and receives a tier ${reward.tier} level-up reward choice.`
+      `${pet.name} gains ${levelUps} level-up${levelUps === 1 ? "" : "s"}; ` +
+        `receives ${rewardGroups.length} tier ${tiers} level-up reward choice${rewardGroups.length === 1 ? "" : "s"}.`
     );
   } else if (suppressedReason === "level-3-merge") {
     addLog(
@@ -339,7 +359,6 @@ function completeLevelUp(
   } else {
     addLog(state, `${pet.name} levels up to ${pet.level}.`);
   }
-  triggerLevelUpAbilities(state, content, pet);
 }
 
 function gainExperience(
@@ -378,9 +397,10 @@ function gainExperience(
 function triggerLevelUpAbilities(
   state: RunState,
   _content: ContentBundle,
-  leveledPet: PetInstance
+  leveledPet: PetInstance,
+  triggerLevel: PetLevel = leveledPet.level
 ): void {
-  if (leveledPet.name === "Fish" && leveledPet.level < 3) {
+  if (leveledPet.name === "Fish" && triggerLevel < 3) {
     const rng = new SeededRandom(
       deriveSeed(state.seed, "fish-level", state.turn, leveledPet.uid)
     );
@@ -389,7 +409,7 @@ function triggerLevelUpAbilities(
       2
     );
     for (const target of targets) {
-      const amount = leveledPet.level;
+      const amount = triggerLevel;
       addPermanentStats(target, amount, amount);
     }
     state.shopRngState = rng.state;
@@ -959,12 +979,16 @@ function triggerShopFaint(
   fainted: PetInstance,
   index: number
 ): void {
+  const pending: Array<{ pet: PetInstance; index: number }> = [];
+  const processed = new Set<string>();
+
   const addToken = (
     name: string,
     attack: number,
     health: number,
     tier: PetInstance["tier"],
     level: PetLevel,
+    insertIndex: number,
     templateId = `token-${name.toLowerCase().replace(/\W+/g, "-")}`
   ): PetInstance | null => {
     if (state.team.length >= TEAM_SIZE) {
@@ -985,7 +1009,11 @@ function triggerShopFaint(
       triggerCounters: {},
       copiedAbility: null
     };
-    state.team.push(token);
+    state.team.splice(
+      Math.max(0, Math.min(insertIndex, state.team.length)),
+      0,
+      token
+    );
     addLog(state, `${name} 在商店阶段被召唤。`);
     if (name === "Scorpion") addPerk(token, "peanut", token.level);
     const friends = [...state.team].sort(
@@ -1011,125 +1039,214 @@ function triggerShopFaint(
     return token;
   };
 
-  if (fainted.perks.some((perk) => perk.id === "honey")) {
-    addToken("Bee", 1, 1, fainted.tier, fainted.level);
-  }
+  const dealDamage = (target: PetInstance, amount: number): void => {
+    if (
+      amount <= 0 ||
+      processed.has(target.uid) ||
+      !state.team.some((pet) => pet.uid === target.uid)
+    ) {
+      return;
+    }
+    target.health = Math.max(0, target.health - amount);
+    addLog(
+      state,
+      `${target.name} 受到 ${amount} 点商店阶段伤害，剩余 ${target.health} 生命。`
+    );
+    if (target.health > 0) return;
+    const targetIndex = state.team.findIndex((pet) => pet.uid === target.uid);
+    if (targetIndex < 0) return;
+    state.team.splice(targetIndex, 1);
+    pending.push({ pet: target, index: targetIndex });
+  };
 
-  switch (fainted.name) {
-    case "Ant": {
-      const rng = new SeededRandom(
-        deriveSeed(state.seed, "shop-faint", fainted.uid)
-      );
-      const target = rng.pick(
-        state.team.filter((pet) => pet.uid !== fainted.uid)
-      );
-      if (target) addPermanentStats(target, fainted.level, fainted.level);
-      state.shopRngState = rng.state;
-      break;
+  const processFaint = (event: { pet: PetInstance; index: number }): void => {
+    if (processed.has(event.pet.uid)) return;
+    processed.add(event.pet.uid);
+    const currentIndex = Math.max(
+      0,
+      Math.min(event.index, state.team.length)
+    );
+    const current = event.pet;
+
+    if (current.perks.some((perk) => perk.id === "honey")) {
+      addToken("Bee", 1, 1, current.tier, current.level, currentIndex);
     }
-    case "Flamingo":
-      for (const target of state.team
-        .slice(index)
-        .filter((pet) => pet.uid !== fainted.uid)
-        .slice(0, 2)) {
-        addPermanentStats(target, fainted.level, fainted.level);
-      }
-      break;
-    case "Cricket":
-      addToken(
-        "Zombie Cricket",
-        fainted.level,
-        fainted.level,
-        1,
-        fainted.level
-      );
-      break;
-    case "Spider": {
-      const rng = new SeededRandom(
-        deriveSeed(state.seed, "shop-spider", state.turn, fainted.uid)
-      );
-      const chosen = rng.pick(
-        [...content.pets.values()].filter((template) => template.tier === 3)
-      );
-      if (chosen) {
-        addToken(
-          chosen.title,
-          2 * fainted.level,
-          2 * fainted.level,
-          chosen.tier,
-          fainted.level,
-          chosen.id
+
+    switch (current.name) {
+      case "Ant": {
+        const rng = new SeededRandom(
+          deriveSeed(state.seed, "shop-faint", state.turn, current.uid)
         );
+        const target = rng.pick(state.team);
+        if (target) addPermanentStats(target, current.level, current.level);
+        state.shopRngState = rng.state;
+        break;
       }
-      break;
-    }
-    case "Sheep":
-      for (let count = 0; count < 2; count++) {
-        addToken(
-          "Ram",
-          2 * fainted.level,
-          2 * fainted.level,
-          3,
-          fainted.level
-        );
+      case "Flamingo":
+        for (const target of state.team.slice(currentIndex, currentIndex + 2)) {
+          addPermanentStats(target, current.level, current.level);
+        }
+        break;
+      case "Hedgehog":
+        for (const target of [...state.team]) {
+          dealDamage(target, 2 * current.level);
+        }
+        break;
+      case "Badger": {
+        const adjacent = [state.team[currentIndex - 1], state.team[currentIndex]]
+          .filter((target): target is PetInstance => Boolean(target));
+        for (const target of adjacent) {
+          dealDamage(target, Math.floor(current.attack * 0.5));
+        }
+        break;
       }
-      break;
-    case "Deer": {
-      const bus = addToken(
-        "Bus",
-        5 * fainted.level,
-        3 * fainted.level,
-        4,
-        fainted.level
-      );
-      if (bus) addPerk(bus, "chili", fainted.level);
-      break;
-    }
-    case "Hippogriff": {
-      const nextTier = Math.min(6, fainted.tier + 1) as PetInstance["tier"];
-      const rng = new SeededRandom(
-        deriveSeed(state.seed, "shop-hippogriff", state.turn, fainted.uid)
-      );
-      const chosen = rng.pick(
-        [...content.pets.values()].filter(
-          (template) => template.tier === nextTier
-        )
-      );
-      if (chosen) {
+      case "Rat":
+        addLog(state, "Dirty Rat 的对手侧召唤在商店阶段没有目标。");
+        break;
+      case "Cricket":
         addToken(
-          chosen.title,
-          5 * fainted.level,
-          5 * fainted.level,
-          chosen.tier,
-          fainted.level,
-          chosen.id
-        );
-      }
-      break;
-    }
-    case "Rooster":
-      for (let count = 0; count < fainted.level; count++) {
-        addToken(
-          "Chick",
-          Math.floor(fainted.attack * 0.5),
+          "Zombie Cricket",
+          current.level,
+          current.level,
           1,
-          5,
-          fainted.level
+          current.level,
+          currentIndex
+        );
+        break;
+      case "Spider": {
+        const rng = new SeededRandom(
+          deriveSeed(state.seed, "shop-spider", state.turn, current.uid)
+        );
+        const chosen = rng.pick(
+          [...content.pets.values()].filter((template) => template.tier === 3)
+        );
+        if (chosen) {
+          addToken(
+            chosen.title,
+            2 * current.level,
+            2 * current.level,
+            chosen.tier,
+            current.level,
+            currentIndex,
+            chosen.id
+          );
+        }
+        break;
+      }
+      case "Sheep":
+        for (let count = 0; count < 2; count++) {
+          addToken(
+            "Ram",
+            2 * current.level,
+            2 * current.level,
+            3,
+            current.level,
+            currentIndex + count
+          );
+        }
+        break;
+      case "Deer": {
+        const bus = addToken(
+          "Bus",
+          5 * current.level,
+          3 * current.level,
+          4,
+          current.level,
+          currentIndex
+        );
+        if (bus) addPerk(bus, "chili", current.level);
+        break;
+      }
+      case "Hippogriff": {
+        const nextTier = Math.min(6, current.tier + 1) as PetInstance["tier"];
+        const rng = new SeededRandom(
+          deriveSeed(state.seed, "shop-hippogriff", state.turn, current.uid)
+        );
+        const chosen = rng.pick(
+          [...content.pets.values()].filter(
+            (template) => template.tier === nextTier
+          )
+        );
+        if (chosen) {
+          addToken(
+            chosen.title,
+            5 * current.level,
+            5 * current.level,
+            chosen.tier,
+            current.level,
+            currentIndex,
+            chosen.id
+          );
+        }
+        break;
+      }
+      case "Rooster":
+        for (let count = 0; count < current.level; count++) {
+          addToken(
+            "Chick",
+            Math.floor(current.attack * 0.5),
+            1,
+            5,
+            current.level,
+            currentIndex + count
+          );
+        }
+        break;
+      case "Mammoth":
+        for (const friend of state.team) {
+          addPermanentStats(friend, 2 * current.level, 2 * current.level);
+        }
+        break;
+      case "Turtle":
+        for (const target of state.team.slice(
+          currentIndex + 1,
+          currentIndex + 1 + current.level
+        )) {
+          addPerk(target, "melon", current.level);
+        }
+        break;
+      default:
+        break;
+    }
+
+    for (const friend of [...state.team]) {
+      const friendIndex = state.team.findIndex(
+        (pet) => pet.uid === friend.uid
+      );
+      if (
+        friend.name === "Ox" &&
+        friendIndex === currentIndex &&
+        (friend.triggerCounters.oxUses ?? 0) < 1
+      ) {
+        friend.triggerCounters.oxUses = 1;
+        addPermanentStats(friend, 1, 0);
+        addPerk(friend, "melon", friend.level);
+      }
+      if (friend.name === "Shark") {
+        addPermanentStats(friend, 2 * friend.level, 2 * friend.level);
+      }
+      if (
+        friend.name === "Fly" &&
+        (friend.triggerCounters.flyUses ?? 0) < 3
+      ) {
+        friend.triggerCounters.flyUses =
+          (friend.triggerCounters.flyUses ?? 0) + 1;
+        addToken(
+          "Zombie Fly",
+          4,
+          4,
+          6,
+          friend.level,
+          currentIndex
         );
       }
-      break;
-    case "Mammoth":
-      for (const friend of state.team) {
-        addPermanentStats(friend, 2 * fainted.level, 2 * fainted.level);
-      }
-      break;
-    case "Turtle":
-      for (const target of state.team.slice(index + 1, index + 1 + fainted.level)) {
-        addPerk(target, "melon", fainted.level);
-      }
-      break;
-    default:
-      break;
+    }
+  };
+
+  pending.push({ pet: fainted, index });
+  while (pending.length > 0) {
+    const next = pending.shift();
+    if (next) processFaint(next);
   }
 }
 
