@@ -49,6 +49,7 @@
 | 单 Perk | 已对齐 | A | `pet.perks` | 复杂覆盖/合并边界待补 |
 | Perk/食物词条说明 | 已实现名称、完整效果、上下文消歧和动画稳定弹层 | A | `perkGlossary` / `foodGlossary` | 无 |
 | 金币变化反馈 | 商店内显示余额与正负变化 | A | `shop-gold` / `animateGoldChange` | 无 |
+| 商店刷新选中状态 | 非破坏性刷新保留队伍选中 | A | `rollButton` | 无 |
 | 伤害日志数值 | 按 Perk 减免后的实际伤害记录 | A | `applyDamage` | 特殊嵌套伤害继续补 fixture |
 | 攻击者攻击力优先触发 | 已对齐 | B | `orderByOwnerAttack` | — |
 | 同攻击种子平局 | 已对齐战斗部分 | B/C | 独立 `trigger-order` 流 | 商店触发也需更多 fixture |

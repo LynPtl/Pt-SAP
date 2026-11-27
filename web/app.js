@@ -1565,8 +1565,7 @@ function openBattleTheater(replay, autoplay = true) {
 }
 
 refs.rollButton.addEventListener("click", async () => {
-  const data = await performAction({ type: "roll" }, "商店已刷新，消耗 1 金。");
-  if (data) selectedUid = null;
+  await performAction({ type: "roll" }, "商店已刷新，消耗 1 金。");
 });
 
 async function endTurnFromUi() {

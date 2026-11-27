@@ -132,6 +132,7 @@ information density and strong battle feedback.
 - [ ] Keyboard focus is visible on all buttons, cards and dialog controls.
 - [x] Perk terms expose descriptions on hover, focus and click/tap.
 - [x] Gold is shown beside the shop and animates textual gain/loss feedback.
+- [x] Refreshing the shop preserves the selected team pet.
 - [ ] Disabled controls recover after a successful network request.
 - [ ] Battle replay shows both teams before playback starts.
 - [ ] Tenth win and fifth loss both produce an unmistakable run-end modal.
