@@ -46,6 +46,9 @@
 | 2/3 XP 升级 | 已补巧克力 Lv.2→3 与 Lv.1→3 双升级 | A | `gainExperience` / `completeLevelUp` | 无 |
 | 升级二选一 | 已补来源记录与 UI 归属 | A/B | `levelUps` / `rewardPets` | 满槽和复杂生成物占位待 Oracle |
 | 单 Perk | 已对齐 | A | `pet.perks` | 复杂覆盖/合并边界待补 |
+| Perk 词条说明 | 已实现名称、完整效果和交互弹层 | A | `perkGlossary` | 无 |
+| 金币变化反馈 | 商店内显示余额与正负变化 | A | `shop-gold` / `animateGoldChange` | 无 |
+| 伤害日志数值 | 按 Perk 减免后的实际伤害记录 | A | `applyDamage` | 特殊嵌套伤害继续补 fixture |
 | 攻击者攻击力优先触发 | 已对齐 | B | `orderByOwnerAttack` | — |
 | 同攻击种子平局 | 已对齐战斗部分 | B/C | 独立 `trigger-order` 流 | 商店触发也需更多 fixture |
 | Hurt 先于 Faint | 已对齐 | B | hurt batch + death queue | 多死亡嵌套仍待补 |

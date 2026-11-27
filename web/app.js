@@ -8,6 +8,9 @@ const refs = {
   levelUpSummary: document.querySelector("#level-up-summary"),
   petShop: document.querySelector("#pet-shop"),
   shopCapacity: document.querySelector("#shop-capacity"),
+  shopGold: document.querySelector("#shop-gold"),
+  shopGoldValue: document.querySelector("#shop-gold-value"),
+  goldChange: document.querySelector("#gold-change"),
   foodShop: document.querySelector("#food-shop"),
   rewardSection: document.querySelector("#reward-section"),
   rewardShop: document.querySelector("#reward-shop"),
@@ -49,7 +52,11 @@ const refs = {
   gameOverTeam: document.querySelector("#game-over-team"),
   gameOverReview: document.querySelector("#game-over-review"),
   gameOverNew: document.querySelector("#game-over-new"),
-  gameOverDismiss: document.querySelector("#game-over-dismiss")
+  gameOverDismiss: document.querySelector("#game-over-dismiss"),
+  perkPopover: document.querySelector("#perk-popover"),
+  perkPopoverTitle: document.querySelector("#perk-popover-title"),
+  perkPopoverDescription: document.querySelector("#perk-popover-description"),
+  perkPopoverClose: document.querySelector("#perk-popover-close")
 };
 
 let game = null;
@@ -63,6 +70,10 @@ let battleTimer = null;
 let attackVisualToken = 0;
 let gameOverTimer = null;
 let levelUpTimer = null;
+let goldAnimationTimer = null;
+let activePerkTerm = null;
+let perkPopoverPinned = false;
+let perkHideTimer = null;
 const battleCards = new Map();
 const battleStats = new Map();
 
@@ -70,6 +81,146 @@ function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function perkGlossary() {
+  return game?.state.perkGlossary ?? [];
+}
+
+function findPerk(perk) {
+  if (!perk) return null;
+  const id = typeof perk === "object" ? perk.id : perk;
+  const name = typeof perk === "object" ? perk.nameZh : perk;
+  return (
+    perkGlossary().find(
+      (entry) =>
+        entry.id === id ||
+        entry.nameZh === name
+    ) ?? null
+  );
+}
+
+function hidePerkPopover() {
+  clearTimeout(perkHideTimer);
+  if (activePerkTerm) {
+    activePerkTerm.setAttribute("aria-expanded", "false");
+  }
+  activePerkTerm = null;
+  perkPopoverPinned = false;
+  refs.perkPopover.classList.add("hidden");
+  refs.perkPopover.style.removeProperty("top");
+  refs.perkPopover.style.removeProperty("left");
+  refs.perkPopover.style.removeProperty("right");
+  refs.perkPopover.style.removeProperty("bottom");
+}
+
+function showPerkPopover(term, perk, pinned) {
+  const definition = findPerk(perk);
+  if (!definition) return;
+  clearTimeout(perkHideTimer);
+  if (activePerkTerm) {
+    activePerkTerm.setAttribute("aria-expanded", "false");
+  }
+  activePerkTerm = term;
+  perkPopoverPinned = pinned;
+  refs.perkPopoverTitle.textContent = definition.nameZh;
+  refs.perkPopoverDescription.textContent = definition.description;
+  refs.perkPopover.classList.remove("hidden");
+  term.setAttribute("aria-expanded", "true");
+
+  const termRect = term.getBoundingClientRect();
+  const popoverRect = refs.perkPopover.getBoundingClientRect();
+  if (window.matchMedia("(max-width: 480px)").matches) {
+    refs.perkPopover.style.width = "auto";
+    refs.perkPopover.style.top = "auto";
+    refs.perkPopover.style.left = "8px";
+    refs.perkPopover.style.right = "8px";
+    refs.perkPopover.style.bottom = "8px";
+    return;
+  }
+
+  refs.perkPopover.style.removeProperty("width");
+  refs.perkPopover.style.removeProperty("right");
+  refs.perkPopover.style.removeProperty("bottom");
+  const left = Math.max(
+    8,
+    Math.min(
+      window.innerWidth - popoverRect.width - 8,
+      termRect.left + termRect.width / 2 - popoverRect.width / 2
+    )
+  );
+  const above = termRect.top - popoverRect.height - 8;
+  const top = above >= 8 ? above : termRect.bottom + 8;
+  refs.perkPopover.style.left = `${left}px`;
+  refs.perkPopover.style.top = `${top}px`;
+}
+
+function schedulePerkHide() {
+  if (perkPopoverPinned) return;
+  clearTimeout(perkHideTimer);
+  perkHideTimer = setTimeout(hidePerkPopover, 140);
+}
+
+function perkTerm(perk, className = "perk-term") {
+  const definition = findPerk(perk);
+  if (!definition) return null;
+  const term = el(
+    "button",
+    `${className} perk-term`,
+    definition.nameZh
+  );
+  term.type = "button";
+  term.dataset.perkId = definition.id;
+  term.setAttribute("aria-expanded", "false");
+  term.setAttribute("aria-haspopup", "dialog");
+  term.setAttribute("aria-controls", "perk-popover");
+  term.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (activePerkTerm === term && perkPopoverPinned) {
+      hidePerkPopover();
+    } else {
+      showPerkPopover(term, definition.id, true);
+    }
+  });
+  term.addEventListener("mouseenter", () => {
+    if (!perkPopoverPinned) showPerkPopover(term, definition.id, false);
+  });
+  term.addEventListener("mouseleave", schedulePerkHide);
+  term.addEventListener("focus", () => {
+    if (!perkPopoverPinned) showPerkPopover(term, definition.id, false);
+  });
+  term.addEventListener("blur", schedulePerkHide);
+  return term;
+}
+
+function renderAbilityText(text, tagName = "p", className = "ability") {
+  const node = el(tagName, className);
+  const names = perkGlossary()
+    .map((perk) => perk.nameZh)
+    .sort((a, b) => b.length - a.length);
+  if (!text || names.length === 0) {
+    node.textContent = text ?? "";
+    return node;
+  }
+  const escaped = names.map((name) =>
+    name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  );
+  const matcher = new RegExp(`(${escaped.join("|")})`, "g");
+  let lastIndex = 0;
+  for (const match of text.matchAll(matcher)) {
+    const index = match.index ?? 0;
+    if (index > lastIndex) {
+      node.append(document.createTextNode(text.slice(lastIndex, index)));
+    }
+    const term = perkTerm(match[0], "inline-perk-term");
+    node.append(term ?? document.createTextNode(match[0]));
+    lastIndex = index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    node.append(document.createTextNode(text.slice(lastIndex)));
+  }
   return node;
 }
 
@@ -196,6 +347,7 @@ async function loadGame() {
 
 async function performAction(action, successMessage) {
   if (requestInFlight) return;
+  const goldBefore = game?.state.gold ?? 0;
   const petsBefore = new Map(
     (game?.state.team ?? []).map((pet) => [pet.uid, pet])
   );
@@ -216,6 +368,13 @@ async function performAction(action, successMessage) {
     pendingPurchase = null;
     pendingMergeSource = null;
     render();
+    const goldDelta = game.state.gold - goldBefore;
+    if (
+      goldDelta !== 0 &&
+      ["buyPet", "buyFood", "sell", "roll"].includes(action.type)
+    ) {
+      animateGoldChange(goldDelta);
+    }
     const leveledPets = game.state.team.filter(
       (pet) => pet.level > (petsBefore.get(pet.uid)?.level ?? pet.level)
     );
@@ -233,6 +392,24 @@ async function performAction(action, successMessage) {
 
 function signed(value) {
   return value >= 0 ? `+${value}` : String(value);
+}
+
+function animateGoldChange(delta) {
+  clearTimeout(goldAnimationTimer);
+  refs.shopGold.classList.remove("gold-up", "gold-down");
+  refs.goldChange.className = "gold-change";
+  void refs.shopGold.offsetWidth;
+  refs.goldChange.textContent =
+    `${delta > 0 ? "+" : ""}${delta} 金`;
+  refs.goldChange.classList.add(
+    "visible",
+    delta > 0 ? "increase" : "decrease"
+  );
+  refs.shopGold.classList.add(delta > 0 ? "gold-up" : "gold-down");
+  goldAnimationTimer = setTimeout(() => {
+    refs.goldChange.className = "gold-change";
+    refs.shopGold.classList.remove("gold-up", "gold-down");
+  }, 900);
 }
 
 function showLevelUpFeedback(leveledPets, petsBefore) {
@@ -282,6 +459,7 @@ function showLevelUpFeedback(leveledPets, petsBefore) {
 
 function render() {
   if (!game) return;
+  hidePerkPopover();
   renderStats();
   renderTeam();
   renderShop();
@@ -300,7 +478,6 @@ function renderStats() {
     ["回合", game.state.turn],
     ["胜场", `${game.state.wins}/10`],
     ["生命", `${game.state.lives}/5`],
-    ["金币", game.state.gold],
     ["商店", `${game.state.shopTier} 档`]
   ];
   if (game.state.lastBattleOutcome) {
@@ -440,7 +617,8 @@ function renderPetCard(pet) {
     )
   );
   for (const perk of pet.perks) {
-    meta.append(el("span", "pill perk", perk));
+    const term = perkTerm(perk, "pill perk");
+    if (term) meta.append(term);
   }
   if (pet.copiedAbilityName) {
     meta.append(el("span", "pill copy", `复制：${pet.copiedAbilityName}`));
@@ -468,7 +646,7 @@ function renderPetCard(pet) {
     );
   }
 
-  card.append(el("p", "ability", pet.ability));
+  card.append(renderAbilityText(pet.ability));
 
   const actions = el("div", "card-actions");
   actions.append(
@@ -578,6 +756,8 @@ function beginMerge(pet) {
 function renderShop() {
   refs.petShop.replaceChildren();
   refs.foodShop.replaceChildren();
+  refs.shopGoldValue.textContent = String(game.state.gold);
+  refs.shopGold.classList.toggle("low", game.state.gold < 3);
   const petBySlot = new Map(game.state.pets.map((offer) => [offer.slot, offer]));
   for (let slot = 0; slot < game.state.petSlotCount; slot++) {
     const offer = petBySlot.get(slot);
@@ -641,7 +821,7 @@ function renderPetOffer(offer) {
     el("span", "", "生命")
   );
   card.append(statLine);
-  card.append(el("p", "ability", offer.ability));
+  card.append(renderAbilityText(offer.ability));
 
   const actions = el("div", "card-actions");
   const cannotFit =
@@ -721,7 +901,7 @@ function renderFoodOffer(offer) {
     )
   );
   card.append(meta);
-  card.append(el("p", "ability", offer.text));
+  card.append(renderAbilityText(offer.text));
 
   const actions = el("div", "card-actions");
   actions.append(
@@ -799,7 +979,7 @@ function renderRewards() {
         el("span", "", "生命")
       );
       card.append(statLine);
-      card.append(el("p", "ability", offer.ability));
+      card.append(renderAbilityText(offer.ability));
       const actions = el("div", "card-actions");
       const cannotFit =
         game.state.teamSize >= game.state.maxTeamSize &&
@@ -846,7 +1026,9 @@ function buyReward(offer) {
 function renderLog() {
   refs.recentLog.replaceChildren();
   const lines = game.state.recentLog.slice(-30);
-  for (const line of lines) refs.recentLog.append(el("li", "", line));
+  for (const line of lines) {
+    refs.recentLog.append(renderAbilityText(line, "li", ""));
+  }
   if (lines.length === 0) refs.recentLog.append(el("li", "muted", "暂无日志"));
 }
 
@@ -862,7 +1044,9 @@ function openPlainBattleLog(lines) {
   const items = lines.length
     ? lines
     : game?.state.recentLog.filter((line) => line.includes("战斗")) ?? [];
-  for (const line of items) refs.battleLog.append(el("li", "", line));
+  for (const line of items) {
+    refs.battleLog.append(renderAbilityText(line, "li", ""));
+  }
   if (items.length === 0) {
     refs.battleLog.append(el("li", "muted", "暂无战斗记录"));
   }
@@ -892,13 +1076,17 @@ function createBattlePetCard(pet, side, position = null) {
   const attack = el("span", "attack", String(pet.attack));
   const health = el("span", "health", String(pet.health));
   stats.append(attack, el("span", "", "/"), health);
-  const ability = el("div", "battle-pet-ability", pet.ability || "无技能");
-  ability.title = pet.ability || "无技能";
-  const perks = el(
+  const ability = renderAbilityText(
+    pet.ability || "无技能",
     "div",
-    "battle-perks",
-    pet.perks?.length ? pet.perks.join(" · ") : ""
+    "battle-pet-ability"
   );
+  ability.title = pet.ability || "无技能";
+  const perks = el("div", "battle-perks");
+  for (const perk of pet.perks ?? []) {
+    const term = perkTerm(perk, "battle-perk-term");
+    if (term) perks.append(term);
+  }
   if (slot) card.append(slot);
   card.append(title, english, meta, stats, ability, perks);
   card.dataset.side = side;
@@ -1064,7 +1252,10 @@ function drawAttackArrow(actorUid, targetUid) {
 }
 
 function formatBattleUnit(unit) {
-  const perks = unit.perks?.length ? ` [${unit.perks.join(",")}]` : "";
+  const perkNames = (unit.perks ?? []).map(
+    (perk) => perk.nameZh ?? perk
+  );
+  const perks = perkNames.length ? ` [${perkNames.join(",")}]` : "";
   return `${unit.position}.${unit.nameZh} L${unit.level} ${unit.attack}/${unit.health}${perks}`;
 }
 
@@ -1096,13 +1287,13 @@ function formatBattleState(state) {
 }
 
 function appendBattleFeed(message, state) {
-  const item = el("div", "", message);
+  const item = renderAbilityText(message, "div", "");
   refs.battleFeed.append(item);
   while (refs.battleFeed.children.length > 3) {
     refs.battleFeed.firstElementChild.remove();
   }
   const logItem = el("li");
-  logItem.append(el("div", "", message));
+  logItem.append(renderAbilityText(message, "div", ""));
   logItem.append(el("div", "log-state", formatBattleState(state)));
   refs.battleLog.append(logItem);
   refs.battleLog.scrollTop = refs.battleLog.scrollHeight;
@@ -1346,5 +1537,27 @@ refs.gameOverNew.addEventListener("click", () => {
 refs.gameOverDismiss.addEventListener("click", () => {
   refs.gameOverDialog.close();
 });
+
+refs.perkPopoverClose.addEventListener("click", (event) => {
+  event.stopPropagation();
+  hidePerkPopover();
+});
+refs.perkPopover.addEventListener("mouseenter", () => {
+  clearTimeout(perkHideTimer);
+});
+refs.perkPopover.addEventListener("mouseleave", schedulePerkHide);
+document.addEventListener("pointerdown", (event) => {
+  if (
+    !event.target.closest(".perk-term") &&
+    !event.target.closest("#perk-popover")
+  ) {
+    hidePerkPopover();
+  }
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") hidePerkPopover();
+});
+window.addEventListener("resize", hidePerkPopover);
+window.addEventListener("scroll", hidePerkPopover, true);
 
 loadGame();

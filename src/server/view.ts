@@ -2,6 +2,7 @@ import {
   battleLogLineZh,
   foodNameZh,
   foodTextZh,
+  PERK_DESCRIPTION_ZH,
   petAbilityZh,
   petNameZh,
   perkNameZh
@@ -12,6 +13,7 @@ import type {
   BattleEvent,
   BattleStateSnapshot,
   FoodTemplate,
+  PerkId,
   PetInstance,
   PetLevel,
   RunState,
@@ -71,6 +73,7 @@ export interface WebView {
     foods: ShopFoodView[];
     rewards: RewardGroupView[];
     levelUps: LevelUpView[];
+    perkGlossary: PerkView[];
     recentLog: string[];
     lastBattleOutcome: RunState["lastBattleOutcome"];
     lastBattleReplay: BattleReplayView | null;
@@ -86,7 +89,13 @@ export interface BattleReplayPetView {
   attack: number;
   health: number;
   ability: string;
-  perks: string[];
+  perks: PerkView[];
+}
+
+export interface PerkView {
+  id: string;
+  nameZh: string;
+  description: string;
 }
 
 export interface BattleReplayView {
@@ -110,7 +119,7 @@ export interface BattleReplayView {
       units: Array<
         Omit<BattleStateSnapshot["units"][number], "perks"> & {
           nameZh: string;
-          perks: string[];
+          perks: PerkView[];
         }
       >;
     };
@@ -134,7 +143,7 @@ export interface PetView {
   battleAttackBonus: number;
   battleHealthBonus: number;
   ability: string;
-  perks: string[];
+  perks: PerkView[];
   sellValue: number;
   copiedAbilityName: string | null;
 }
@@ -212,6 +221,18 @@ export interface RewardGroupView {
   }>;
 }
 
+function perkView(id: PerkId): PerkView {
+  return {
+    id,
+    nameZh: perkNameZh(id),
+    description: PERK_DESCRIPTION_ZH[id]
+  };
+}
+
+function perkGlossary(): PerkView[] {
+  return (Object.keys(PERK_DESCRIPTION_ZH) as PerkId[]).map(perkView);
+}
+
 function xpThresholdForNextLevel(level: PetLevel): number | null {
   return level === 1 ? 2 : level === 2 ? 5 : null;
 }
@@ -256,7 +277,7 @@ function petView(
     battleAttackBonus: pet.battleStats.attack,
     battleHealthBonus: pet.battleStats.health,
     ability,
-    perks: pet.perks.map((perk) => perkNameZh(perk.id)),
+    perks: pet.perks.map((perk) => perkView(perk.id)),
     sellValue: sellValueForPet(pet),
     copiedAbilityName: copied ? petNameZh(copied.title) : null
   };
@@ -280,7 +301,7 @@ function battleReplayPetView(
       pet.level,
       template?.abilities[pet.level - 1] ?? ""
     ),
-    perks: pet.perks.map((perk) => perkNameZh(perk.id))
+    perks: pet.perks.map((perk) => perkView(perk.id))
   };
 }
 
@@ -320,7 +341,7 @@ function battleReplayView(
           units: (event.state?.units ?? []).map((unit) => ({
             ...unit,
             nameZh: petNameZh(unit.name),
-            perks: unit.perks.map(perkNameZh)
+            perks: unit.perks.map((perk) => perkView(perk))
           }))
         }
       };
@@ -549,6 +570,7 @@ export function buildWebView(
       ),
       rewards: rewardGroupsView(state, content),
       levelUps: levelUpsView(state),
+      perkGlossary: perkGlossary(),
       recentLog: state.log.slice(-120).map(battleLogLineZh),
       lastBattleOutcome: state.lastBattleOutcome,
       lastBattleReplay: battleReplayView(state, content)

@@ -54,6 +54,12 @@ test("web view exposes level-up causes and reward-group origins", () => {
   const view = buildWebView(state, content, "view-session");
 
   assert.equal(view.state.levelUps.length, 1);
+  assert.equal(view.state.perkGlossary.length, 10);
+  assert.ok(
+    view.state.perkGlossary.every(
+      (perk) => perk.nameZh && perk.description
+    )
+  );
   assert.deepEqual(
     {
       name: view.state.levelUps[0].nameZh,

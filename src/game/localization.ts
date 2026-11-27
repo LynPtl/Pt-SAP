@@ -1,4 +1,4 @@
-import type { PetLevel } from "./types.js";
+import type { PerkId, PetLevel } from "./types.js";
 
 export const PET_NAME_ZH: Record<string, string> = {
   Ant: "蚂蚁",
@@ -433,6 +433,19 @@ export const PERK_NAME_ZH: Record<string, string> = {
   peanut: "花生"
 };
 
+export const PERK_DESCRIPTION_ZH: Record<PerkId, string> = {
+  honey: "倒下时：召唤一只 1/1 蜜蜂。Perk 会保留到之后的商店阶段。",
+  meatBone: "每次攻击额外造成 3 点伤害。",
+  chili: "攻击后，对第二只敌人造成 5 点伤害。",
+  cake: "回合结束时：出售价值增加 1 金。",
+  garlic: "每次受到的伤害减少 2 点。",
+  melon: "每场战斗一次：抵挡 20 点伤害。",
+  mushroom: "每场战斗一次：倒下时以 1/1 复活。",
+  steak: "每场战斗一次：一次攻击额外造成 20 点伤害。",
+  coconut: "每场战斗一次：完全抵挡一次伤害。",
+  peanut: "被此宠物攻击并受到伤害的敌人会被击倒。"
+};
+
 export function petNameZh(name: string): string {
   return PET_NAME_ZH[name] ?? name;
 }
@@ -502,6 +515,14 @@ function localizeBattleBody(line: string): string {
 
   match = body.match(/^(.+) attacks (.+) for (\d+)\.$/);
   if (match) return `${match[1]} 攻击 ${match[2]}，造成 ${match[3]} 点伤害。`;
+  match = body.match(/^(.+) attacks (.+)\.$/);
+  if (match) return `${match[1]} 攻击 ${match[2]}。`;
+  match = body.match(
+    /^(.+)'s Garlic reduces (\d+) damage to (\d+)\.$/
+  );
+  if (match) {
+    return `${match[1]} 的大蒜将 ${match[2]} 点伤害降低为 ${match[3]} 点。`;
+  }
   match = body.match(
     /^(.+) takes (\d+) (attack|ability) damage and is at (\d+) health\.$/
   );

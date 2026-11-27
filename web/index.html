@@ -69,9 +69,25 @@
               <p class="eyebrow">当前商店</p>
               <h2 id="shop-title">宠物与食物</h2>
             </div>
-            <button id="roll-button" class="button secondary" type="button">
-              刷新 · 1 金
-            </button>
+            <div class="shop-heading-actions">
+              <div class="shop-gold-wrap">
+                <div id="shop-gold" class="shop-gold" aria-label="当前金币">
+                  <span class="shop-gold-coin" aria-hidden="true">金</span>
+                  <span class="shop-gold-copy">
+                    <span>当前金币</span>
+                    <strong id="shop-gold-value">10</strong>
+                  </span>
+                </div>
+                <span
+                  id="gold-change"
+                  class="gold-change"
+                  aria-live="polite"
+                ></span>
+              </div>
+              <button id="roll-button" class="button secondary" type="button">
+                刷新 · 1 金
+              </button>
+            </div>
           </div>
 
           <div id="reward-section" class="shop-section hidden">
@@ -280,6 +296,27 @@
         </button>
       </div>
     </dialog>
+
+    <aside
+      id="perk-popover"
+      class="perk-popover hidden"
+      role="dialog"
+      aria-labelledby="perk-popover-title"
+      aria-describedby="perk-popover-description"
+    >
+      <div class="perk-popover-heading">
+        <strong id="perk-popover-title"></strong>
+        <button
+          id="perk-popover-close"
+          class="perk-popover-close"
+          type="button"
+          aria-label="关闭 Perk 说明"
+        >
+          ×
+        </button>
+      </div>
+      <p id="perk-popover-description"></p>
+    </aside>
 
     <div id="busy" class="busy hidden" aria-hidden="true">
       <div class="spinner"></div>

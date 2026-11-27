@@ -272,6 +272,31 @@ test("simultaneous attacks emit explicit player and enemy attack events", () => 
   );
 });
 
+test("Garlic reduces a two-damage Sheep attack to zero and logs the reason", () => {
+  const penguin = customPet("Penguin", "garlic-penguin", 6, 4);
+  penguin.perks = [{ id: "garlic", sourceLevel: 1, uses: null }];
+  const result = resolveBattle(
+    {
+      playerTeam: [customPet("Sheep", "sheep-attacker", 2, 2)],
+      enemyTeam: [penguin],
+      seed: "garlic-sheep"
+    },
+    content
+  );
+  const garlic = result.events.find(
+    (event) =>
+      event.type === "trigger" &&
+      event.message.includes("Garlic reduces 2 damage to 0")
+  );
+  const damageToPenguin = result.events.find(
+    (event) =>
+      event.type === "damage" &&
+      event.targetUids.includes("enemy:garlic-penguin")
+  );
+  assert.ok(garlic);
+  assert.equal(damageToPenguin, undefined);
+});
+
 test("equal-attack trigger ties use seeded order instead of fixed player priority", () => {
   const firstDamageSides = new Set<string | null>();
   for (let seed = 0; seed < 24; seed++) {

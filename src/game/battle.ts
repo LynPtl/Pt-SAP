@@ -260,7 +260,7 @@ class BattleSim {
       "player",
       playerFront,
       [enemyFront.uid],
-      `${playerFront.name} attacks ${enemyFront.name} for ${playerAttack}.`,
+      `${playerFront.name} attacks ${enemyFront.name}.`,
       { attack: playerAttack }
     );
     this.log(
@@ -268,7 +268,7 @@ class BattleSim {
       "enemy",
       enemyFront,
       [playerFront.uid],
-      `${enemyFront.name} attacks ${playerFront.name} for ${enemyAttack}.`,
+      `${enemyFront.name} attacks ${playerFront.name}.`,
       { attack: enemyAttack }
     );
     const enemyDamage = this.applyDamage(
@@ -393,7 +393,18 @@ class BattleSim {
     let damage = Math.max(0, Math.floor(rawDamage));
 
     const garlic = this.perk(target, "garlic");
-    if (garlic) damage = Math.max(0, damage - 2);
+    if (garlic) {
+      const before = damage;
+      damage = Math.max(0, damage - 2);
+      this.log(
+        "trigger",
+        target.side,
+        source,
+        [target.uid],
+        `${target.name}'s Garlic reduces ${before} damage to ${damage}.`,
+        { before, damage }
+      );
+    }
 
     const melon = this.perk(target, "melon");
     if (melon && damage > 0) {

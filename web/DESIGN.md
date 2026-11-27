@@ -50,11 +50,21 @@ information density and strong battle feedback.
 - Show price, tier, frozen/generated state, ability and target type.
 - Disabled purchases use 45% opacity and retain a readable label.
 - Generated food slots are systematically separated from ordinary roll slots.
+- Show current gold inside the shop heading next to the roll action. Buys,
+  sales and rolls display a textual `+N 金` / `-N 金` float plus a short
+  directional wallet pulse.
 - Shop cards must not collapse into one full-width card per row in narrow
   windows. Use two columns below `640px`, three columns from `640px` through
   the stacked-layout breakpoint, and auto-fit columns in the desktop shop panel.
 - Keep complete ability text visible; compact spacing and type size rather than
   truncating game information.
+
+### Perk glossary
+
+- Perk tags and Perk names embedded in pet abilities are interactive terms.
+- Hover or keyboard focus shows a popover; click/tap pins the definition.
+- Mobile uses a bottom-sheet-style popover with an explicit close control.
+- Every Perk term includes its name and complete mechanical description.
 
 ### Battle theater
 
@@ -64,6 +74,8 @@ information density and strong battle feedback.
   position rather than filling the first empty card.
 - Attack event highlights the actor; damage event shakes the target, floats the
   damage number and updates health.
+- Attack narration must not claim raw damage as final damage. Damage-reduction
+  Perks display their mitigation result, including attacks reduced to zero.
 - Faint, summon, buff and Perk events have distinct visible states.
 - Playback provides play/pause, replay, speed and progress controls.
 - The result banner identifies win/loss/draw and surviving counts.
@@ -110,6 +122,8 @@ information density and strong battle feedback.
 - [ ] Every team card exposes stats, level/XP, ability, Perks and sell value.
 - [ ] Every shop card exposes price, state and complete localized effect.
 - [ ] Keyboard focus is visible on all buttons, cards and dialog controls.
+- [x] Perk terms expose descriptions on hover, focus and click/tap.
+- [x] Gold is shown beside the shop and animates textual gain/loss feedback.
 - [ ] Disabled controls recover after a successful network request.
 - [ ] Battle replay shows both teams before playback starts.
 - [ ] Tenth win and fifth loss both produce an unmistakable run-end modal.

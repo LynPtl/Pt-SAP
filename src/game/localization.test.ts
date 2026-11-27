@@ -4,6 +4,8 @@ import { loadContent } from "./content.js";
 import {
   FOOD_NAME_ZH,
   FOOD_TEXT_ZH,
+  PERK_DESCRIPTION_ZH,
+  PERK_NAME_ZH,
   PET_ABILITY_ZH,
   PET_NAME_ZH,
   battleLogLineZh,
@@ -41,6 +43,17 @@ test("every Turtle Pack food has Chinese name and description", () => {
   }
 });
 
+test("every food perk has a Chinese name and glossary description", () => {
+  assert.deepEqual(
+    Object.keys(PERK_NAME_ZH).sort(),
+    Object.keys(PERK_DESCRIPTION_ZH).sort()
+  );
+  for (const [id, description] of Object.entries(PERK_DESCRIPTION_ZH)) {
+    assert.ok(PERK_NAME_ZH[id], `missing perk name: ${id}`);
+    assert.ok(description.trim(), `missing perk description: ${id}`);
+  }
+});
+
 test("pet names and common battle log events are localized", () => {
   assert.equal(petNameZh("Ant"), "蚂蚁");
   assert.equal(
@@ -50,5 +63,11 @@ test("pet names and common battle log events are localized", () => {
   assert.equal(
     battleLogLineZh("[战斗] Player wins."),
     "你赢得了战斗。"
+  );
+  assert.equal(
+    battleLogLineZh(
+      "[战斗] Kangaroo triggers because Zombie Cricket attacks."
+    ),
+    "袋鼠 因 Zombie 蟋蟀 攻击触发技能。"
   );
 });
