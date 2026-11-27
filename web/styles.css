@@ -201,6 +201,25 @@ button:disabled {
   color: #991b1b;
 }
 
+.level-up-toast {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid #86efac;
+  border-radius: var(--radius-md);
+  background: #f0fdf4;
+  color: #166534;
+  box-shadow: var(--shadow-sm);
+  animation: level-up-in 220ms ease-out;
+}
+
+.level-up-toast strong {
+  flex: 0 0 auto;
+  font-size: 16px;
+}
+
 .game-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(420px, 1fr);
@@ -289,6 +308,14 @@ button:disabled {
 .pet-card.merge-target {
   border-color: var(--warning);
   box-shadow: 0 0 0 1px var(--warning);
+}
+
+.pet-card.just-leveled {
+  border-color: var(--success);
+  box-shadow:
+    0 0 0 2px rgb(22 163 74 / 18%),
+    0 0 24px rgb(22 163 74 / 14%);
+  animation: level-up-card 900ms ease-out;
 }
 
 .pet-card.empty {
@@ -517,6 +544,13 @@ button:disabled {
   border: 1px solid #fde68a;
   border-radius: var(--radius-md);
   background: #fffbeb;
+}
+
+.shop-section.reward-flash {
+  border-radius: var(--radius-md);
+  outline: 2px solid rgb(22 163 74 / 30%);
+  outline-offset: -2px;
+  animation: reward-flash 900ms ease-out;
 }
 
 .reward-pair {
@@ -1197,6 +1231,25 @@ button:disabled {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes level-up-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes level-up-card {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes reward-flash {
+  50% {
+    background: #f0fdf4;
   }
 }
 

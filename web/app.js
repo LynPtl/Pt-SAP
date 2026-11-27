@@ -1,6 +1,8 @@
 const refs = {
   stats: document.querySelector("#stats"),
   notice: document.querySelector("#notice"),
+  levelUpToast: document.querySelector("#level-up-toast"),
+  levelUpDetail: document.querySelector("#level-up-detail"),
   teamGrid: document.querySelector("#team-grid"),
   selectionHint: document.querySelector("#selection-hint"),
   petShop: document.querySelector("#pet-shop"),
@@ -59,6 +61,7 @@ let battlePlayback = null;
 let battleTimer = null;
 let attackVisualToken = 0;
 let gameOverTimer = null;
+let levelUpTimer = null;
 const battleCards = new Map();
 const battleStats = new Map();
 
@@ -192,6 +195,9 @@ async function loadGame() {
 
 async function performAction(action, successMessage) {
   if (requestInFlight) return;
+  const levelsBefore = new Map(
+    (game?.state.team ?? []).map((pet) => [pet.uid, pet.level])
+  );
   setBusy(true);
   try {
     const data = await api("/api/action", {
@@ -209,6 +215,10 @@ async function performAction(action, successMessage) {
     pendingPurchase = null;
     pendingMergeSource = null;
     render();
+    const leveledPets = game.state.team.filter(
+      (pet) => pet.level > (levelsBefore.get(pet.uid) ?? pet.level)
+    );
+    if (leveledPets.length) showLevelUpFeedback(leveledPets);
     if (data.addedLog?.length) lastBattleLog = data.addedLog;
     showNotice(successMessage ?? data.message ?? "操作成功。", "ok");
     return data;
@@ -218,6 +228,31 @@ async function performAction(action, successMessage) {
   } finally {
     setBusy(false);
   }
+}
+
+function showLevelUpFeedback(leveledPets) {
+  clearTimeout(levelUpTimer);
+  refs.levelUpDetail.textContent = leveledPets
+    .map(
+      (pet) =>
+        `${pet.nameZh} 升至 Lv.${pet.level}，技能已强化`
+    )
+    .join("；");
+  refs.levelUpToast.classList.remove("hidden");
+  refs.rewardSection.classList.add("reward-flash");
+  for (const pet of leveledPets) {
+    const card = refs.teamGrid.querySelector(
+      `[data-uid="${CSS.escape(pet.uid)}"]`
+    );
+    card?.classList.add("just-leveled");
+  }
+  levelUpTimer = setTimeout(() => {
+    refs.levelUpToast.classList.add("hidden");
+    refs.rewardSection.classList.remove("reward-flash");
+    refs.teamGrid
+      .querySelectorAll(".just-leveled")
+      .forEach((card) => card.classList.remove("just-leveled"));
+  }, 5200);
 }
 
 function render() {
@@ -315,6 +350,7 @@ function renderPetCard(pet) {
       .filter(Boolean)
       .join(" ")
   );
+  card.dataset.uid = pet.uid;
   card.tabIndex = 0;
   card.setAttribute("role", "button");
   card.setAttribute("aria-label", `选择 ${pet.nameZh}`);
@@ -1103,6 +1139,8 @@ refs.confirmNewRun.addEventListener("click", async () => {
     gameOverTimer = null;
     refs.runStatePill.classList.add("hidden");
     if (refs.gameOverDialog.open) refs.gameOverDialog.close();
+    refs.levelUpToast.classList.add("hidden");
+    clearTimeout(levelUpTimer);
     render();
     showNotice("新对局已开始。", "ok");
   } catch (error) {
