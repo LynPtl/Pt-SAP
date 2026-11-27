@@ -106,6 +106,15 @@ export function loadContent(): ContentBundle {
     foods.set(template.id, template);
   }
 
+  foods.set("chocolate-milk", {
+    id: "chocolate-milk",
+    name: "Chocolate Milk",
+    tier: null,
+    cost: 3,
+    tokenOnly: true,
+    text: "Give one pet attack only."
+  });
+
   return { pets, petsByTitle, foods };
 }
 

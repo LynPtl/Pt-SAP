@@ -389,6 +389,7 @@ export const FOOD_NAME_ZH: Record<string, string> = {
   steak: "牛排",
   "bread-crumbs": "面包屑",
   milk: "牛奶",
+  "chocolate-milk": "巧克力奶",
   coconut: "椰子",
   peanut: "花生"
 };
@@ -413,6 +414,8 @@ export const FOOD_TEXT_ZH: Record<string, string> = {
   steak: "使一只宠物获得牛排 Perk。一次攻击额外造成 +20 伤害。",
   "bread-crumbs": "使一只宠物获得 +1 攻击。",
   milk: "使一只宠物获得 1 级牛奶效果：+1 攻击和 +2 生命。",
+  "chocolate-milk":
+    "使一只宠物获得 1 级巧克力奶效果：+1 攻击。",
   coconut: "一次性免疫一次伤害。",
   peanut: "被本宠物攻击并受到伤害的宠物会被击倒。"
 };

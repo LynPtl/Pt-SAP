@@ -8,7 +8,8 @@ import { loadContent } from "./content.js";
 import {
   appendGhost,
   chooseGhost,
-  loadGhosts
+  loadGhosts,
+  withGhostLock
 } from "./ghosts.js";
 import { loadRun, saveRun } from "./persistence.js";
 import { SeededRandom } from "./rng.js";
@@ -22,7 +23,8 @@ import {
   ghostStatAmountForTurn,
   mergeTeamPets,
   refreshShop,
-  sellPet
+  sellPet,
+  stockWormFood
 } from "./run.js";
 import type {
   PetInstance,
@@ -100,9 +102,9 @@ test("seeded random is reproducible", () => {
 test("Turtle Pack content exposes 60 pets and correctly tiered foods", () => {
   const foods = [...content.foods.values()];
   assert.equal(content.pets.size, 60);
-  assert.equal(foods.length, 21);
+  assert.equal(foods.length, 22);
   assert.equal(foods.filter((food) => food.tier !== null).length, 17);
-  assert.equal(foods.filter((food) => food.tokenOnly).length, 4);
+  assert.equal(foods.filter((food) => food.tokenOnly).length, 5);
   assert.equal(content.foods.get("sleeping-pill")?.cost, 1);
   assert.equal(content.foods.get("apple")?.cost, 3);
 });
@@ -281,11 +283,39 @@ test("a level-up reward pair allows only one purchase", () => {
   const group = state.shop.rewardPets[0].rewardGroup;
   assert.ok(group);
   assert.equal(state.shop.rewardPets[1].rewardGroup, group);
+  assert.notEqual(
+    state.shop.rewardPets[0].templateId,
+    state.shop.rewardPets[1].templateId
+  );
+  assert.ok(
+    state.shop.rewardPets.every(
+      (offer) => content.pets.get(offer.templateId)?.tier === 2
+    )
+  );
   const result = buyPet(state, content, null, undefined, 0);
   assert.equal(result.ok, true);
   assert.equal(
     state.shop.rewardPets.some((offer) => offer.rewardGroup === group),
     false
+  );
+});
+
+test("separate level-ups create separate linked reward groups", () => {
+  const state = createRun("multiple-reward-groups", content);
+  const ant = pet("Ant", "reward-ant-a");
+  const beaver = pet("Beaver", "reward-beaver");
+  ant.xp = 1;
+  beaver.xp = 1;
+  state.team = [ant, beaver];
+  state.gold = 100;
+  state.shop.foods[0] = foodOffer("chocolate");
+  assert.equal(buyFood(state, content, 0, ant.uid).ok, true);
+  state.shop.foods[0] = foodOffer("chocolate");
+  assert.equal(buyFood(state, content, 0, beaver.uid).ok, true);
+  assert.equal(state.shop.rewardPets.length, 4);
+  assert.equal(
+    new Set(state.shop.rewardPets.map((offer) => offer.rewardGroup)).size,
+    2
   );
 });
 
@@ -364,6 +394,99 @@ test("Worm stocks an extra two-gold apple at the next start of turn", () => {
       (offer) => offer?.templateId === "apple" && offer.cost === 2
     )
   );
+});
+
+test("Worm fills the right-most empty slot, otherwise replaces right-most unfrozen food", () => {
+  const state = createRun("worm-placement", content);
+  const worm = pet("Worm", "worm-placement-pet", 2);
+  state.shop.foods = [
+    foodOffer("apple"),
+    null,
+    null
+  ];
+  const emptyStock = stockWormFood(state, content, worm);
+  assert.ok(emptyStock);
+  assert.equal(state.shop.foods[2]?.itemId, emptyStock.itemId);
+  assert.equal(emptyStock.cost, 2);
+  assert.equal(emptyStock.milkLevel, 2);
+
+  state.shop.foods = [
+    foodOffer("apple"),
+    foodOffer("honey"),
+    foodOffer("pear")
+  ];
+  state.shop.foods[0]!.frozen = true;
+  state.shop.foods[2]!.frozen = true;
+  const replacement = stockWormFood(state, content, worm);
+  assert.ok(replacement);
+  assert.equal(state.shop.foods[1]?.itemId, replacement.itemId);
+
+  for (const offer of state.shop.foods) {
+    if (offer) offer.frozen = true;
+  }
+  const before = state.shop.foods.map((offer) => offer?.itemId);
+  assert.equal(stockWormFood(state, content, worm), null);
+  assert.deepEqual(
+    state.shop.foods.map((offer) => offer?.itemId),
+    before
+  );
+});
+
+test("multiple Worms each stock one generated Apple", () => {
+  const state = createRun("two-worms", content);
+  state.team = [pet("Worm", "worm-a"), pet("Worm", "worm-b")];
+  endTurn(state, content, []);
+  const generatedApples = state.shop.foods.filter(
+    (offer) => offer?.generated && offer.templateId === "apple"
+  );
+  assert.equal(generatedApples.length, 2);
+});
+
+test("Cow replaces food capacity with two free level-scaled Milks", () => {
+  const state = createRun("cow-milk", content);
+  const cow = content.petsByTitle.get("Cow");
+  assert.ok(cow);
+  state.gold = 100;
+  state.shop.pets[0] = {
+    kind: "pet",
+    itemId: "cow-offer",
+    templateId: cow.id,
+    cost: 3,
+    attackBonus: 0,
+    healthBonus: 0,
+    rewardGroup: null,
+    frozen: false,
+    reward: false
+  };
+  assert.equal(buyPet(state, content, 0).ok, true);
+  const milks = state.shop.foods.filter(
+    (offer) => offer?.templateId === "milk"
+  );
+  assert.equal(milks.length, 2);
+  assert.ok(milks.every((offer) => offer?.cost === 0));
+  assert.ok(milks.every((offer) => offer?.milkLevel === 1));
+  assert.equal(state.shop.foods[0]?.generated, false);
+  assert.equal(state.shop.foods[1]?.generated, true);
+});
+
+test("Cow eating Chocolate creates two free attack-only Chocolate Milks", () => {
+  const state = createRun("cow-chocolate-milk", content);
+  const cow = pet("Cow", "cow-chocolate", 2);
+  state.team = [cow];
+  state.gold = 100;
+  state.shop.foods[0] = foodOffer("chocolate");
+  const result = buyFood(state, content, 0, cow.uid);
+  assert.equal(result.ok, true);
+  const chocolateMilk = state.shop.foods.filter(
+    (offer) => offer?.templateId === "chocolate-milk"
+  );
+  assert.equal(chocolateMilk.length, 2);
+  assert.ok(chocolateMilk.every((offer) => offer?.cost === 0));
+  assert.ok(chocolateMilk.every((offer) => offer?.milkLevel === 2));
+  const beforeAttack = cow.attack;
+  state.shop.foods[0] = chocolateMilk[0]!;
+  assert.equal(buyFood(state, content, 0, cow.uid).ok, true);
+  assert.equal(cow.attack, beforeAttack + 2);
 });
 
 test("Duck only buffs pets currently displayed in the shop", () => {
@@ -612,6 +735,43 @@ test("ghost selection returns a clone of another run's snapshot", () => {
   assert.equal(ghostTeam[0].attack, 2);
 });
 
+test("ghost runId distinguishes same-seed runs and excludes the current run", () => {
+  const state = createRun("shared-daily-seed", content);
+  const team = [pet("Ant", "daily-ghost")];
+  const otherRun = chooseGhost(
+    state,
+    [
+      {
+        id: "daily-other",
+        runSeed: state.seed,
+        runId: "other-run",
+        turn: state.turn,
+        wins: state.wins,
+        lives: state.lives,
+        team
+      }
+    ],
+    "current-run"
+  );
+  assert.ok(otherRun);
+  const currentRun = chooseGhost(
+    state,
+    [
+      {
+        id: "daily-current",
+        runSeed: state.seed,
+        runId: "current-run",
+        turn: state.turn,
+        wins: state.wins,
+        lives: state.lives,
+        team
+      }
+    ],
+    "current-run"
+  );
+  assert.equal(currentRun, null);
+});
+
 test("Ghost fallback follows SAP turn and action-point design", () => {
   assert.deepEqual(
     [1, 2, 3, 4, 5, 8, 11, 20].map(ghostActionPointsForTurn),
@@ -664,6 +824,35 @@ test("run saves and ghost snapshots round-trip", async () => {
     const ghosts = await loadGhosts(ghostPath);
     assert.equal(ghosts.length, 1);
     assert.equal(ghosts[0].team[0].name, "Ant");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("serialized ghost writes do not lose concurrent snapshots", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "pt-sap-ghost-lock-"));
+  try {
+    const state = createRun("ghost-lock", content);
+    state.team = [pet("Ant", "locked-ant")];
+    const ghostPath = path.join(directory, "ghosts.json");
+    await Promise.all(
+      Array.from({ length: 8 }, (_value, index) =>
+        withGhostLock(ghostPath, () =>
+          appendGhost(
+            state,
+            {
+              turn: 1,
+              wins: 0,
+              lives: 5,
+              runId: `run-${index}`,
+              team: state.team
+            },
+            ghostPath
+          )
+        )
+      )
+    );
+    assert.equal((await loadGhosts(ghostPath)).length, 8);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

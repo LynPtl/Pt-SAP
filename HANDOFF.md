@@ -16,7 +16,7 @@
 
 **当前状态：已转为私有 SAP Normal 严格玩法副本。战斗引擎、分档商店、
 合并升级、食物、本机幽灵队、中文 Web UI 和战斗时间轴回放已完成首版，
-49 个测试通过。商店容量已按 3/3/4/4/5/5 宠物槽与
+56 个测试通过。商店容量已按 3/3/4/4/5/5 宠物槽与
 1/1/2/2/2/2 普通食物槽修正，并保留 2 个生成食物槽。下一阶段是更多
 真实对局 parity 用例和联机服务层/PostgreSQL。**
 
@@ -317,7 +317,8 @@ docker compose run --rm pt-sap
 
 预期：
 
-- 49 个测试通过
+- 56 个测试通过
 - 60 只宠物、21 个 Turtle Pack 食物
+- 游戏内容另含 Cow 的 Chocolate Milk 生成食物，共 22 个食物定义
 - 59 full / 1 partial / 0 custom
 - 报告生成到 `reports/turtle-pack-coverage.md`

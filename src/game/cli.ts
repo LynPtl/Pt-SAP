@@ -86,6 +86,7 @@ function help(): void {
 async function main(): Promise<void> {
   const content = loadContent();
   const requestedSeed = process.argv[2];
+  const manualRunId = `cli-${process.pid}-${Date.now()}`;
   let state = createRun(
     requestedSeed ?? `run-${new Date().toISOString().slice(0, 10)}`,
     content
@@ -247,12 +248,17 @@ async function main(): Promise<void> {
       const battleWins = state.wins;
       const battleLives = state.lives;
       const ghosts = await loadGhosts();
-      const result = endTurn(state, content, chooseGhost(state, ghosts) ?? undefined);
+      const result = endTurn(
+        state,
+        content,
+        chooseGhost(state, ghosts, manualRunId) ?? undefined
+      );
       if (result.playerSnapshot) {
         await appendGhost(state, {
           turn: battleTurn,
           wins: battleWins,
           lives: battleLives,
+          runId: manualRunId,
           team: result.playerSnapshot
         });
       }

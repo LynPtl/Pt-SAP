@@ -362,6 +362,26 @@ function addPerk(pet: PetInstance, id: PerkId, level: PetLevel): void {
   ];
 }
 
+function replaceShopFoodWithTwoMilk(
+  state: RunState,
+  content: ContentBundle,
+  level: PetLevel,
+  templateId: "milk" | "chocolate-milk"
+): void {
+  const ordinaryCapacity = ordinaryFoodShopCapacity(state.shopTier);
+  state.shop.foods = Array.from(
+    { length: totalFoodShopCapacity(state.shopTier) },
+    (_value, index) => {
+      if (index >= 2) return null;
+      return makeShopFood(state, content, templateId, {
+        cost: 0,
+        milkLevel: level,
+        generated: index >= ordinaryCapacity
+      });
+    }
+  );
+}
+
 function triggerBuyAbilities(
   state: RunState,
   content: ContentBundle,
@@ -381,18 +401,7 @@ function triggerBuyAbilities(
   }
 
   if (boughtPet.name === "Cow") {
-    const ordinaryCapacity = ordinaryFoodShopCapacity(state.shopTier);
-    state.shop.foods = Array.from(
-      { length: totalFoodShopCapacity(state.shopTier) },
-      (_value, index) => {
-        if (index >= 2) return null;
-        return makeShopFood(state, content, "milk", {
-          cost: 0,
-          milkLevel: boughtPet.level,
-          generated: index >= ordinaryCapacity
-        });
-      }
-    );
+    replaceShopFoodWithTwoMilk(state, content, boughtPet.level, "milk");
     addLog(state, `Cow 用 ${boughtPet.level} 级牛奶替换了商店食物。`);
   }
 
@@ -720,7 +729,9 @@ function foodTargets(
 
 function triggerFoodEaten(
   state: RunState,
-  target: PetInstance
+  target: PetInstance,
+  content: ContentBundle,
+  foodId: string
 ): void {
   const ordered = orderShopTriggers(
     state,
@@ -747,6 +758,15 @@ function triggerFoodEaten(
     );
     for (const friend of friends) addPermanentStats(friend, seal.level, 0);
     state.shopRngState = rng.state;
+  }
+  if (target.name === "Cow" && foodId === "chocolate") {
+    replaceShopFoodWithTwoMilk(
+      state,
+      content,
+      target.level,
+      "chocolate-milk"
+    );
+    addLog(state, "Cow 因食用 Chocolate 生成了两瓶 Chocolate Milk。");
   }
 }
 
@@ -782,6 +802,11 @@ function applyFoodEffect(
     case "milk": {
       const level = food.milkLevel ?? 1;
       addPermanentStats(target, level * multiplier, 2 * level * multiplier);
+      break;
+    }
+    case "chocolate-milk": {
+      const level = food.milkLevel ?? 1;
+      addPermanentStats(target, level * multiplier, 0);
       break;
     }
     case "cupcake":
@@ -1058,7 +1083,7 @@ export function buyFood(
       addLog(state, `Sleeping Pill 令 ${target.name} 退场。`);
     } else {
       applyFoodEffect(state, content, offer, target);
-      triggerFoodEaten(state, target);
+      triggerFoodEaten(state, target, content, food.id);
     }
   }
   addLog(state, `${food.name} 已使用。`);
@@ -1130,25 +1155,7 @@ function runStartTurnAbilities(
         state.gold += pet.level;
         break;
       case "Worm": {
-        const ordinaryCapacity = ordinaryFoodShopCapacity(state.shopTier);
-        for (
-          let index = state.shop.foods.length - 1;
-          index >= ordinaryCapacity;
-          index--
-        ) {
-          if (state.shop.foods[index]) continue;
-          state.shop.foods[index] = makeShopFood(
-            state,
-            content,
-            "apple",
-            {
-              cost: 2,
-              milkLevel: pet.level,
-              generated: true
-            }
-          );
-          break;
-        }
+        stockWormFood(state, content, pet);
         break;
       }
       case "Giraffe": {
@@ -1185,6 +1192,37 @@ function runStartTurnAbilities(
         break;
     }
   }
+}
+
+export function stockWormFood(
+  state: RunState,
+  content: ContentBundle,
+  worm: PetInstance
+): ShopFoodItem | null {
+  let slot = -1;
+  for (let index = state.shop.foods.length - 1; index >= 0; index--) {
+    if (!state.shop.foods[index]) {
+      slot = index;
+      break;
+    }
+  }
+  if (slot < 0) {
+    for (let index = state.shop.foods.length - 1; index >= 0; index--) {
+      const offer = state.shop.foods[index];
+      if (offer && !offer.frozen) {
+        slot = index;
+        break;
+      }
+    }
+  }
+  if (slot < 0) return null;
+  const apple = makeShopFood(state, content, "apple", {
+    cost: 2,
+    milkLevel: worm.level,
+    generated: true
+  });
+  state.shop.foods[slot] = apple;
+  return apple;
 }
 
 function startNextTurn(state: RunState, content: ContentBundle): void {

@@ -381,7 +381,9 @@ function foodView(
       : "none";
   const level = offer.milkLevel ?? 1;
   const localizedText =
-    food.id === "milk"
+    food.id === "chocolate-milk"
+      ? `使一只宠物获得 ${level} 级巧克力奶效果：+${level} 攻击。`
+      : food.id === "milk"
       ? `使一只宠物获得 ${level} 级牛奶效果：+${level} 攻击和 +${level * 2} 生命。`
       : food.id === "apple" && level > 1
         ? `使一只宠物获得 +${level} 攻击和 +${level} 生命。`

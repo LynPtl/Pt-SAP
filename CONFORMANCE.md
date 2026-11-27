@@ -32,6 +32,8 @@
 | 商店宠物槽 3/3/4/4/5/5 | 已对齐 | B | `petShopCapacity` | 无 |
 | 普通食物槽 1/1/2/2/2/2 | 已对齐 | B | `ordinaryFoodShopCapacity` | 无 |
 | 2 个生成食物槽 | 已对齐容量 | B | `ShopState.foods` | 生成、冻结、替换顺序仍需 Oracle |
+| Worm 生成 Apple | 已补空槽与满槽替换 | B | `stockWormFood` | 满槽多源冲突仍需 Oracle |
+| Cow Milk / Chocolate Milk | 已补 | B | `replaceShopFoodWithTwoMilk` | 与升级奖励的精确占位待 Oracle |
 | 3 金基础价格 | 已对齐 | A | `content.ts` | 特殊价格需逐项维护 |
 | 刷新 1 金、冻结免费 | 已对齐 | A | `run.ts` | 冻结排序细节待验证 |
 | 出售价值等于等级 | 已对齐 | A/B | `sellValueForPet` | 特殊修正需逐项测试 |
@@ -52,6 +54,7 @@
 | Ghost 第 2 回合起 5 宠 | 已对齐 | A | `generateGhostTeam` | — |
 | Ghost 行动点 1/2/4/6 | 已对齐数量 | A | `ghostActionPointsForTurn` | 类型选择概率和顺序待 Oracle |
 | 幽灵匹配同回合/同胜场 | 已对齐过滤 | A | `chooseGhost` | 生命接近的精确阈值待补 |
+| 共享幽灵文件并发 | 已串行化 | B | `withGhostLock` | 多进程仍需 PostgreSQL |
 | 真实多人异步池 | 未实现 | — | 本地 `ghosts.json` | 需要服务器数据库 |
 | Arena Easy/Hard | 未实现 | — | Normal only | 不在当前范围 |
 | Versus/With Friends | 未实现 | — | — | 不在当前范围 |
@@ -69,7 +72,7 @@
    - Tiger/Parrot 复制链；
    - Whale 多吞入和释放。
 3. 修正 Badger 相邻目标与商店阶段伤害链。
-4. 对 Worm/Cow/升级奖励实现生成物槽位、冻结和覆盖顺序测试。
+4. 对升级奖励和 Cow/Milk 与奖励的精确占位建立 Oracle fixture。
 5. 建立 Ghost 行动点差分测试，确认 Perk/XP/属性选择概率。
 6. 增加服务器共享幽灵池，再迁移 PostgreSQL。
 

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { deriveSeed, SeededRandom } from "./rng.js";
 import type { PetInstance, RunState } from "./types.js";
@@ -6,6 +6,7 @@ import type { PetInstance, RunState } from "./types.js";
 export interface GhostSnapshot {
   id: string;
   runSeed: string;
+  runId?: string;
   turn: number;
   wins: number;
   lives: number;
@@ -18,6 +19,30 @@ interface GhostFile {
 }
 
 const GHOST_LIMIT = 1000;
+const ghostQueues = new Map<string, Promise<void>>();
+
+export async function withGhostLock<T>(
+  filePath: string,
+  action: () => Promise<T>
+): Promise<T> {
+  const resolved = path.resolve(filePath);
+  const previous = ghostQueues.get(resolved) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const queued = previous.then(() => gate);
+  ghostQueues.set(resolved, queued);
+  await previous.catch(() => undefined);
+  try {
+    return await action();
+  } finally {
+    release();
+    if (ghostQueues.get(resolved) === queued) {
+      ghostQueues.delete(resolved);
+    }
+  }
+}
 
 export async function loadGhosts(
   filePath = "saves/ghosts.json"
@@ -50,6 +75,7 @@ export async function appendGhost(
     turn: number;
     wins: number;
     lives: number;
+    runId?: string;
     team: PetInstance[];
   },
   filePath = "saves/ghosts.json"
@@ -60,6 +86,7 @@ export async function appendGhost(
   existing.push({
     id: `${state.seed}:${snapshot.turn}:${snapshot.wins}:${existing.length}`,
     runSeed: state.seed,
+    ...(snapshot.runId ? { runId: snapshot.runId } : {}),
     turn: snapshot.turn,
     wins: snapshot.wins,
     lives: snapshot.lives,
@@ -68,16 +95,21 @@ export async function appendGhost(
   const latest = existing.slice(-GHOST_LIMIT);
   const file: GhostFile = { version: 1, snapshots: latest };
   await mkdir(path.dirname(resolved), { recursive: true });
-  await writeFile(resolved, `${JSON.stringify(file, null, 2)}\n`, "utf8");
+  const temporary = `${resolved}.${process.pid}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(file, null, 2)}\n`, "utf8");
+  await rename(temporary, resolved);
 }
 
 export function chooseGhost(
   state: RunState,
-  snapshots: GhostSnapshot[]
+  snapshots: GhostSnapshot[],
+  currentRunId?: string
 ): PetInstance[] | null {
   const candidates = snapshots.filter(
     (snapshot) =>
-      snapshot.runSeed !== state.seed &&
+      (snapshot.runId
+        ? snapshot.runId !== currentRunId
+        : snapshot.runSeed !== state.seed) &&
       snapshot.turn === state.turn &&
       snapshot.wins === state.wins &&
       snapshot.team.length > 0

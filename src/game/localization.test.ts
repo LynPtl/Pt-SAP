@@ -33,8 +33,8 @@ test("every Turtle Pack pet has a Chinese name and three ability texts", () => {
 });
 
 test("every Turtle Pack food has Chinese name and description", () => {
-  assert.equal(Object.keys(FOOD_NAME_ZH).length, 21);
-  assert.equal(Object.keys(FOOD_TEXT_ZH).length, 21);
+  assert.equal(Object.keys(FOOD_NAME_ZH).length, 22);
+  assert.equal(Object.keys(FOOD_TEXT_ZH).length, 22);
   for (const food of content.foods.values()) {
     assert.ok(FOOD_NAME_ZH[food.id], `missing food name: ${food.id}`);
     assert.ok(FOOD_TEXT_ZH[food.id], `missing food text: ${food.id}`);

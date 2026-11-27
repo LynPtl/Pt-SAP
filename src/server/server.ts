@@ -9,7 +9,12 @@ import {
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadContent } from "../game/content.js";
-import { appendGhost, chooseGhost, loadGhosts } from "../game/ghosts.js";
+import {
+  appendGhost,
+  chooseGhost,
+  loadGhosts,
+  withGhostLock
+} from "../game/ghosts.js";
 import { battleLogLineZh } from "../game/localization.js";
 import {
   buyFood,
@@ -154,7 +159,8 @@ export async function createWebServer(
               state,
               content,
               body,
-              ghostPath
+              ghostPath,
+              resolved.sessionId
             );
             if (result.ok) {
               await sessionStore.save(resolved.sessionId, state);
@@ -197,7 +203,8 @@ function applyAction(
   state: RunState,
   content: ContentBundle,
   body: ActionBody,
-  ghostPath: string
+  ghostPath: string,
+  sessionId: string
 ): Promise<ActionResult | EndTurnResult> {
   switch (body.type) {
     case "buyPet":
@@ -248,7 +255,7 @@ function applyAction(
     case "roll":
       return Promise.resolve(refreshShop(state, content, true));
     case "end":
-      return endTurnWithGhost(state, content, ghostPath);
+      return endTurnWithGhost(state, content, ghostPath, sessionId);
     default:
       throw new Error("Unknown action");
   }
@@ -257,36 +264,41 @@ function applyAction(
 async function endTurnWithGhost(
   state: RunState,
   content: ContentBundle,
-  ghostPath: string
+  ghostPath: string,
+  sessionId: string
 ): Promise<EndTurnResult> {
-  const battleTurn = state.turn;
-  const battleWins = state.wins;
-  const battleLives = state.lives;
-  let ghosts: Awaited<ReturnType<typeof loadGhosts>> = [];
-  try {
-    ghosts = await loadGhosts(ghostPath);
-  } catch (error) {
-    console.warn("Could not load ghosts; using bot opponent.", error);
-  }
-  const ghostTeam = chooseGhost(state, ghosts) ?? undefined;
-  const result = endTurn(state, content, ghostTeam);
-  if (result.playerSnapshot) {
+  return withGhostLock(ghostPath, async () => {
+    const battleTurn = state.turn;
+    const battleWins = state.wins;
+    const battleLives = state.lives;
+    let ghosts: Awaited<ReturnType<typeof loadGhosts>> = [];
     try {
-      await appendGhost(
-        state,
-        {
-          turn: battleTurn,
-          wins: battleWins,
-          lives: battleLives,
-          team: result.playerSnapshot
-        },
-        ghostPath
-      );
+      ghosts = await loadGhosts(ghostPath);
     } catch (error) {
-      console.warn("Could not save ghost snapshot.", error);
+      console.warn("Could not load ghosts; using bot opponent.", error);
     }
-  }
-  return result;
+    const ghostTeam =
+      chooseGhost(state, ghosts, sessionId) ?? undefined;
+    const result = endTurn(state, content, ghostTeam);
+    if (result.playerSnapshot) {
+      try {
+        await appendGhost(
+          state,
+          {
+            turn: battleTurn,
+            wins: battleWins,
+            lives: battleLives,
+            runId: sessionId,
+            team: result.playerSnapshot
+          },
+          ghostPath
+        );
+      } catch (error) {
+        console.warn("Could not save ghost snapshot.", error);
+      }
+    }
+    return result;
+  });
 }
 
 async function resolveSession(
