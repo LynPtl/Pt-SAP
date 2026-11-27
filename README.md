@@ -20,6 +20,8 @@ npm run typecheck
 npm test
 ```
 
+See `HANDOFF.md` for current state, known issues, and the next implementation steps.
+
 ## Outputs
 
 - `reference/raw/turtle-pack-pages.json` — cached wikitext
