@@ -1,16 +1,21 @@
 {
   "name": "pt-sap",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "description": "Text auto-battler research scraper and coverage tooling for a private SAP-like clone",
   "license": "MIT",
   "scripts": {
     "scrape": "tsx src/scraper/cli.ts scrape",
     "report": "tsx src/scraper/cli.ts report",
     "coverage": "tsx src/scraper/cli.ts all",
+    "play": "tsx src/game/cli.ts",
+    "serve": "tsx src/server/server.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/scraper/wikitext.test.ts src/scraper/normalize.test.ts"
+    "test": "tsx --test src/scraper/*.test.ts src/game/*.test.ts src/server/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

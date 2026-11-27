@@ -7,14 +7,18 @@
 目标形态：
 
 - 5 格队伍，顺序即站位
-- 每回合 10 金，商店 3 宠物 + 2 食物
+- 每回合 10 金；商店容量按档位增长，并保留 2 个生成食物槽
 - 食物是单件装备，不做合成
 - 标签/羁绊只做推荐和技能条件，不做 2/4/6 硬阈值
 - 10 胜 / 5 命，异步打幽灵队
-- 纯文本、无图片、无动画、可暂停，适合摸鱼
-- 私有使用；代码 MIT，原创数据/文本计划 CC0 或 MIT
+- 纯文字内容、无位图素材；Web UI 使用轻量状态动画反馈战斗，可暂停
+- 私有使用；代码 MIT，SAP 衍生名称/文本不得公开
 
-**当前状态：数据抓取和 Turtle Pack 覆盖率报告已完成。战斗引擎、商店、文本 UI 都还没开始。**
+**当前状态：已转为私有 SAP Normal 严格玩法副本。战斗引擎、分档商店、
+合并升级、食物、本机幽灵队、中文 Web UI 和战斗时间轴回放已完成首版，
+47 个测试通过。商店容量已按 3/3/4/4/5/5 宠物槽与
+1/1/2/2/2/2 普通食物槽修正，并保留 2 个生成食物槽。下一阶段是更多
+真实对局 parity 用例和联机服务层/PostgreSQL。**
 
 本项目独立运行，**不要接入 ptnook**。
 
@@ -22,7 +26,7 @@
 
 - 路径：`d:/pt-sap`
 - 分支：`main`
-- 工作区：干净
+- 工作区：严格玩法与 CLI 首版尚未提交
 - 最近提交：`git log -1`（交接文档加入前为 `b7d08f2`）
 - 环境：Windows，Node `v24.20.0`，npm `11.19.0`
 - 运行时依赖：`zod`
@@ -36,8 +40,11 @@ npm install
 npm run coverage        # 抓取 + 归一化 + 报告
 npm run scrape          # 只抓取/更新缓存
 npm run report          # 只用缓存重新生成报告
+npm run play            # 运行私有文本游戏
+npm run serve           # 启动 Web UI（默认 :3000）
 npm run typecheck
 npm test
+docker compose up -d --build
 ```
 
 强制重新抓取：
@@ -50,6 +57,16 @@ npm run coverage -- --refresh
 
 ```text
 pt-sap/
+  src/game/
+    battle.ts        # 确定性战斗引擎
+    run.ts           # 商店、经济、升级、回合和幽灵对手
+    ghosts.ts        # 本机异步幽灵快照
+    cli.ts           # 可玩文本客户端
+    *.test.ts
+  src/server/
+    server.ts        # HTTP API、会话、安全头
+    sessionStore.ts  # 每浏览器会话持久化
+    view.ts          # Web 视图与中文战斗回放
   src/scraper/
     wiki.ts          # MediaWiki API 客户端，Zod 校验
     wikitext.ts      # 模板、链接、标记解析
@@ -65,6 +82,15 @@ pt-sap/
     turtle-pack-coverage.md   # 已提交
   README.md
   LICENSE            # MIT
+  SPEC.md            # 严格 SAP Normal 玩法规格
+  DEPLOYMENT.md      # Linux/Docker/未来联机拓扑
+  Dockerfile
+  compose.yaml
+  web/
+    index.html
+    app.js
+    styles.css
+    DESIGN.md        # shadcn 风格设计规范
 ```
 
 ## 4. 数据管线
@@ -170,20 +196,20 @@ Turtle Pack：
 
 - 5 格队伍，左到右 = 前到后
 - 每回合 10 金
-- 商店 3 宠物 + 2 食物
-- 宠物/食物 3 金，刷新 1 金，卖出 1 金，冻结免费
+- 商店宠物槽按档位 3/3/4/4/5/5，普通食物槽 1/1/2/2/2/2，另有 2 个生成食物槽
+- 宠物/食物按定义价格（Turtle Pack 仅 Sleeping Pill 为 1 金），刷新 1 金，出售价值等于等级并可被修正，冻结免费
 - 6 个商店档位，第 1/3/5/7/9/11 回合升档
 - 10 胜 / 5 命，异步幽灵队
-- 每只宠物 1 个食物槽；少数宠物可 2 槽
+- 每只宠物最多持有 1 个 Perk；属性食物即时结算，不占 Perk 槽
 - 食物是单件装备，**不做合成、散件、转职**
 - 标签是技能条件和推荐信号，**不做 2/4/6 数值雪球**
 - 纯文本，无图片/动画/音效
-- 私有克隆：原创中文名、自己生成技能文本、不要发布 SAP 素材
+- 私有克隆：直接使用本机 `reference/` 中的 SAP 名称和技能文本；不得公开发布
 - 引擎必须确定性：同种子 + 同队伍 = 同战报
 
 ## 9. 下一步建议（按优先级）
 
-### P0：战斗引擎骨架
+### 已完成：战斗引擎骨架
 
 建议新增 `src/engine/`：
 
@@ -205,7 +231,7 @@ src/engine/
 - 同种子可复现
 - 先支持 Ant、Cricket、Hedgehog、Beaver 这类简单技能，写 golden test
 
-### P1：效果和目标原语
+### 已完成：效果和目标原语
 
 先实现覆盖率最高的：
 
@@ -215,17 +241,17 @@ src/engine/
 - `works N times` 要计数器
 - `copy` 单独 custom handler
 
-### P2：原创内容层
+### 已调整：私有内容层
 
 当前 `reference/normalized` 不能直接发布。需要：
 
-1. 新建 `data/pets.json`、`data/foods.json`
-2. 用原创中文名替换 SAP 名
-3. 从 DSL 生成中文技能文本，或人工重写
-4. 保持 `reference/` 只做内部对照
-5. 数据协议建议 CC0-1.0；代码 MIT
+1. 引擎运行时只读加载 `reference/normalized/`
+2. 保持 SAP 名称与英文技能文本，仅在本机私有环境使用
+3. Docker 镜像不复制 `reference/`，运行时只读挂载
+4. 公开仓库前仍需清理 SAP 衍生内容
+5. 代码 MIT
 
-### P3：可玩文本 CLI
+### 已完成：可玩 Web UI + CLI
 
 先做单机 1 人 + 7 幽灵队：
 
@@ -238,13 +264,19 @@ src/engine/
 - 存档/恢复
 - 每日种子
 
-### P4：幽灵队
+### 已完成首版：幽灵队和战斗回放
 
 - 每回合存玩家棋盘快照
 - 按回合/分数采样
 - 第一版可以用规则 bot 生成合法队伍，不着急做 MCTS
 
-### P5：扩展卡包
+### 后续：浏览器/联机
+
+- 抽出可复用的 HTTP/WebSocket 服务层。
+- 使用 PostgreSQL 保存在线局、命令幂等键和共享幽灵快照。
+- 保持战斗引擎无数据库依赖。
+
+### 后续：扩展卡包
 
 Turtle Pack 跑通后，再抓其他包。不要一上来实现 535 只。
 
@@ -260,13 +292,13 @@ Turtle Pack 跑通后，再抓其他包。不要一上来实现 535 只。
 - 不要改已确定的经济/队伍/胜负规则；要改先问
 - 共享工作区时不要 `git add -A`；用项目的选择性提交工具
 
-## 11. 待定决策
+## 11. 已确认决策
 
-- 标签是否要有轻微机制收益？当前建议：只做技能条件 + 顾问推荐，不做数值阈值
-- 是否加“4 金提前升档”？当前建议：先不加，保持 SAP 节奏
-- 文本 UI：终端 CLI 还是浏览器 `<pre>`？未定
-- 中文命名方案：未定
-- 数据协议：代码 MIT，数据 CC0-1.0（推荐）还是统一 MIT
+- 核心玩法严格对齐 SAP Normal。
+- 不加标签数值阈值、4 金提前升档或其他机制变体。
+- 当前文本 UI 为终端 CLI；未来增加浏览器/WebSocket 时复用纯引擎。
+- 私有阶段直接使用 SAP 名称和英文技能文本。
+- 代码 MIT；SAP 衍生内容不进入公开产物。
 
 ## 12. 快速验收
 
@@ -278,11 +310,13 @@ npm install
 npm run typecheck
 npm test
 npm run coverage
+npm run play
+docker compose run --rm pt-sap
 ```
 
 预期：
 
-- 9 个测试通过
+- 47 个测试通过
 - 60 只宠物、21 个 Turtle Pack 食物
 - 59 full / 1 partial / 0 custom
 - 报告生成到 `reports/turtle-pack-coverage.md`

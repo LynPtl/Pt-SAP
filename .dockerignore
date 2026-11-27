@@ -1,0 +1,11 @@
+.git
+.agents
+.codex
+.aws
+node_modules
+reference
+saves
+reports
+*.log
+*.tsbuildinfo
+.DS_Store

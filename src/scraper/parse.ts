@@ -1,5 +1,10 @@
 import type { FoodRecord, PetRecord, RawPage } from "./types.js";
-import { findTemplate, findTemplates, parseTemplate, stripMarkup } from "./wikitext.js";
+import {
+  findBalancedTemplate,
+  findTemplate,
+  parseTemplate,
+  stripMarkup
+} from "./wikitext.js";
 
 const PACK_FLAGS: Array<[string, string]> = [
   ["turtlepack", "Turtle Pack"],
@@ -76,19 +81,40 @@ export function parsePet(page: RawPage): PetRecord {
 }
 
 export function parseFoods(page: RawPage): FoodRecord[] {
-  const rows = findTemplates(page.content, "Foods/row");
-  return rows.map((row, index) => {
+  const rows: Array<{ text: string; index: number }> = [];
+  const rowPattern = /\{\{\s*:?\s*Foods\/row\b/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = rowPattern.exec(page.content)) !== null) {
+    const end = findBalancedTemplate(page.content, match.index);
+    if (end < 0) break;
+    rows.push({
+      text: page.content.slice(match.index, end),
+      index: match.index
+    });
+    rowPattern.lastIndex = end;
+  }
+
+  return rows.map(({ text: row, index }, foodIndex) => {
     const { params } = parseTemplate(row);
-    const name = stripMarkup(params.get("food") ?? `Food ${index + 1}`);
+    const name = stripMarkup(params.get("food") ?? `Food ${foodIndex + 1}`);
     const packs = PACK_FLAGS.filter(([flag]) => {
       const value = params.get(flag);
       return Boolean(value && !/^(no|false|0)$/i.test(value));
     }).map(([, label]) => label);
+    const prefix = page.content.slice(0, index);
+    const sectionMatches = [
+      ...prefix.matchAll(/\|\-\|\s*(?:Tier\s+([1-6])|No\s+Tier)\s*=/gi)
+    ];
+    const lastSection = sectionMatches.at(-1);
+    const tier = lastSection?.[1]
+      ? Number.parseInt(lastSection[1], 10)
+      : null;
 
     return {
       id: slug(name),
       name,
-      tier: null,
+      tier: Number.isFinite(tier) ? tier : null,
       packs,
       rawAbility: params.get("ability") ?? "",
       ability: stripMarkup(params.get("ability") ?? ""),

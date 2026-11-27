@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="pt-sap 私有 Turtle Pack 自动战斗游戏"
+    />
+    <title>pt-sap · Turtle Pack</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">pt</div>
+        <div>
+          <h1>pt-sap</h1>
+          <p>Turtle Pack · SAP Normal</p>
+        </div>
+      </div>
+      <div id="stats" class="stats" aria-label="对局状态"></div>
+      <div class="topbar-actions">
+        <span id="run-state-pill" class="run-state-pill hidden">本局结束</span>
+        <button id="new-run" class="button ghost" type="button">新游戏</button>
+        <button id="end-turn-top" class="button primary" type="button">
+          结束回合
+        </button>
+      </div>
+    </header>
+
+    <main class="page">
+      <section id="notice" class="notice" role="status" aria-live="polite">
+        正在读取对局…
+      </section>
+
+      <div class="game-layout">
+        <section class="panel team-panel" aria-labelledby="team-title">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">你的阵容</p>
+              <h2 id="team-title">队伍</h2>
+            </div>
+            <div class="legend">第 1 格为前排 · 点击宠物可选中</div>
+          </div>
+          <div id="team-grid" class="team-grid"></div>
+          <div id="selection-hint" class="selection-hint"></div>
+        </section>
+
+        <section class="panel shop-panel" aria-labelledby="shop-title">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">当前商店</p>
+              <h2 id="shop-title">宠物与食物</h2>
+            </div>
+            <button id="roll-button" class="button secondary" type="button">
+              刷新 · 1 金
+            </button>
+          </div>
+
+          <div class="shop-section">
+            <div class="section-title">
+              <h3>宠物</h3>
+              <span id="shop-capacity"></span>
+            </div>
+            <div id="pet-shop" class="shop-grid pets"></div>
+          </div>
+
+          <div class="shop-section">
+            <div class="section-title">
+              <h3>食物</h3>
+              <span>单击购买；单体食物先选中队伍目标</span>
+            </div>
+            <div id="food-shop" class="shop-grid foods"></div>
+          </div>
+
+          <div id="reward-section" class="shop-section hidden">
+            <div class="section-title">
+              <h3>升级奖励</h3>
+              <span>每组只能选择一个</span>
+            </div>
+            <div id="reward-shop" class="reward-groups"></div>
+          </div>
+
+          <div class="turn-actions">
+            <div class="autosave">操作自动保存</div>
+            <button id="end-turn" class="button primary" type="button">
+              结束回合 · 战斗
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel log-panel" aria-labelledby="log-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">对局记录</p>
+            <h2 id="log-title">最近日志</h2>
+          </div>
+          <button id="show-battle" class="button ghost" type="button">
+            查看完整战报
+          </button>
+        </div>
+        <ol id="recent-log" class="log-list"></ol>
+      </section>
+    </main>
+
+    <dialog id="new-run-dialog" class="dialog">
+      <form method="dialog" class="dialog-card">
+        <div class="dialog-heading">
+          <h2>开始新游戏</h2>
+          <button
+            class="icon-button"
+            value="cancel"
+            aria-label="关闭"
+            type="submit"
+          >
+            ×
+          </button>
+        </div>
+        <label for="seed-input">种子，可留空</label>
+        <input
+          id="seed-input"
+          name="seed"
+          maxlength="64"
+          autocomplete="off"
+          placeholder="例如 daily-2026-11-27"
+        />
+        <p class="muted">相同种子和相同操作会得到相同战报。</p>
+        <div class="dialog-actions">
+          <button class="button ghost" value="cancel" type="submit">
+            取消
+          </button>
+          <button id="confirm-new-run" class="button primary" type="button">
+            开始
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="battle-dialog" class="dialog battle-dialog">
+      <div class="dialog-card battle-shell">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">战斗回放</p>
+            <h2 id="battle-title">战斗报告</h2>
+          </div>
+          <button
+            id="close-battle"
+            class="icon-button"
+            aria-label="关闭"
+            type="button"
+          >
+            ×
+          </button>
+        </div>
+        <div
+          id="battle-result"
+          class="battle-result"
+          role="status"
+          aria-live="polite"
+        ></div>
+        <div class="battle-arena">
+          <svg
+            id="battle-lines"
+            class="battle-lines"
+            aria-hidden="true"
+            preserveAspectRatio="none"
+          >
+            <defs>
+              <marker
+                id="battle-arrow"
+                markerWidth="8"
+                markerHeight="8"
+                refX="7"
+                refY="4"
+                orient="auto"
+              >
+                <path d="M0,0 L8,4 L0,8 Z" class="arrow-head"></path>
+              </marker>
+            </defs>
+            <line
+              id="battle-line"
+              class="battle-line"
+              marker-end="url(#battle-arrow)"
+            ></line>
+          </svg>
+          <section class="battle-side enemy-side">
+            <div class="battle-side-title">
+              <span>对手阵容</span>
+              <small>前排 → 后排</small>
+            </div>
+            <div id="enemy-battle-team" class="battle-team"></div>
+          </section>
+          <div class="battle-center">
+            <span>VS</span>
+            <div id="attack-effect" class="attack-effect"></div>
+          </div>
+          <section class="battle-side player-side">
+            <div class="battle-side-title">
+              <span>你的阵容</span>
+              <small>前排 → 后排</small>
+            </div>
+            <div id="player-battle-team" class="battle-team"></div>
+          </section>
+        </div>
+        <div class="battle-controls">
+          <button id="battle-play" class="button secondary" type="button">
+            暂停
+          </button>
+          <button id="battle-replay" class="button ghost" type="button">
+            重新播放
+          </button>
+          <label class="speed-control">
+            速度
+            <select id="battle-speed">
+              <option value="850">慢</option>
+              <option value="520" selected>正常</option>
+              <option value="260">快</option>
+            </select>
+          </label>
+          <progress
+            id="battle-progress"
+            value="0"
+            max="1"
+            aria-label="战斗回放进度"
+          ></progress>
+          <span id="battle-step" class="muted"></span>
+        </div>
+        <div
+          id="battle-feed"
+          class="battle-feed"
+          aria-live="polite"
+        ></div>
+        <ol id="battle-log" class="log-list battle-log"></ol>
+      </div>
+    </dialog>
+
+    <dialog id="game-over-dialog" class="dialog game-over-dialog">
+      <div class="game-over-shell">
+        <div id="game-over-mark" class="game-over-mark" aria-hidden="true">GG</div>
+        <p class="eyebrow">RUN COMPLETE</p>
+        <h2 id="game-over-title">本局结束</h2>
+        <p id="game-over-reason" class="game-over-reason"></p>
+        <div id="game-over-accolade" class="game-over-accolade hidden">
+          <strong id="game-over-accolade-title"></strong>
+          <span id="game-over-accolade-detail"></span>
+        </div>
+        <div id="game-over-stats" class="game-over-stats"></div>
+        <div class="game-over-team-wrap">
+          <h3>最终阵容</h3>
+          <div id="game-over-team" class="game-over-team"></div>
+        </div>
+        <div class="game-over-actions">
+          <button id="game-over-review" class="button secondary" type="button">
+            重看最终战斗
+          </button>
+          <button id="game-over-new" class="button primary" type="button">
+            再来一局
+          </button>
+        </div>
+        <button id="game-over-dismiss" class="button ghost" type="button">
+          留在此页查看
+        </button>
+      </div>
+    </dialog>
+
+    <div id="busy" class="busy hidden" aria-hidden="true">
+      <div class="spinner"></div>
+    </div>
+  </body>
+</html>
