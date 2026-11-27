@@ -396,6 +396,7 @@ test("a complete turn produces a battle result and advances or ends the run", ()
   );
   assert.ok(state.log.some((line) => line.startsWith("[战斗]")));
   assert.equal(state.lastBattleReplay?.opponentKind, "generated");
+  assert.ok(state.log.some((line) => line.includes("系统生成 Ghost")));
 });
 
 test("battle replay records a selected player ghost snapshot", () => {
@@ -412,6 +413,7 @@ test("battle replay records a selected player ghost snapshot", () => {
   );
   assert.equal(state.lastBattleReplay?.opponentKind, "snapshot");
   assert.equal(state.lastBattleReplay?.opponentId, "ghost-snapshot-1");
+  assert.ok(state.log.some((line) => line.includes("玩家幽灵")));
 });
 
 test("the tenth Arena victory ends the run as a win", () => {
@@ -647,6 +649,34 @@ test("Cow eating Chocolate creates two free attack-only Chocolate Milks", () => 
   );
   assert.equal(buyFood(state, content, milkSlot, cow.uid).ok, true);
   assert.equal(cow.attack, beforeAttack + 2);
+});
+
+test("Worm stocks into the right-most generated slot after Cow", () => {
+  const state = createRun("worm-after-cow", content);
+  const cow = content.petsByTitle.get("Cow");
+  assert.ok(cow);
+  state.gold = 100;
+  state.shop.pets[0] = {
+    kind: "pet",
+    itemId: "worm-after-cow-offer",
+    templateId: cow.id,
+    cost: 3,
+    attackBonus: 0,
+    healthBonus: 0,
+    rewardGroup: null,
+    frozen: false,
+    reward: false
+  };
+  assert.equal(buyPet(state, content, 0).ok, true);
+
+  const apple = stockWormFood(
+    state,
+    content,
+    pet("Worm", "worm-after-cow")
+  );
+  assert.ok(apple);
+  assert.equal(state.shop.foods[1]?.templateId, "milk");
+  assert.equal(state.shop.foods[2]?.itemId, apple.itemId);
 });
 
 test("Chocolate Milk is stocked before a Cow level-up reward", () => {

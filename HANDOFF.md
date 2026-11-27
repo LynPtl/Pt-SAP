@@ -16,7 +16,7 @@
 
 **当前状态：私有 SAP Normal 严格玩法副本。战斗引擎、分档商店、生成食物、
 升级奖励、商店阶段 Faint 链、真实玩家快照 + 系统 Ghost、共享 PostgreSQL
-Ghost 池、中文 Web UI 和战斗时间轴回放已接入；当前 68 个测试通过。下一阶段是逐技能 Oracle、
+Ghost 池、中文 Web UI 和战斗时间轴回放已接入；当前 70 个测试通过。下一阶段是逐技能 Oracle、
 商店复杂占位和更完整的多人事务层。**
 
 本项目独立运行，**不要接入 ptnook**。
@@ -26,7 +26,7 @@ Ghost 池、中文 Web UI 和战斗时间轴回放已接入；当前 68 个测�
 - 路径：`d:/pt-sap`
 - 分支：`main`
 - 工作区：商店/生成物/Ghost 增强批次准备提交
-- 最近已推送提交：`117f0ef`（本批完成后更新）
+- 最近已推送提交：`c89f1a8`（本批完成后更新）
 - 环境：Windows，Node `v24.20.0`，npm `11.19.0`
 - 运行时依赖：`zod`、`pg`
 - 开发依赖：`typescript`、`tsx`、`@types/node`、`@types/pg`
@@ -316,7 +316,7 @@ docker compose run --rm pt-sap
 
 预期：
 
-- 56 个测试通过
+- 70 个测试通过
 - 60 只宠物、21 个 Turtle Pack 食物
 - 游戏内容另含 Cow 的 Chocolate Milk 生成食物，共 22 个食物定义
 - 59 full / 1 partial / 0 custom

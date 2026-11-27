@@ -678,12 +678,14 @@ export function sellPet(
     const targets = rng.sample(state.team, 2);
     for (const target of targets) addPermanentStats(target, pet.level, 0);
     state.shopRngState = rng.state;
+    addLog(state, `${pet.name} 的出售效果强化了 ${targets.length} 名友军。`);
   } else if (pet.name === "Duck") {
     for (const offer of [...state.shop.pets, ...state.shop.rewardPets]) {
       if (offer) {
         offer.healthBonus += pet.level;
       }
     }
+    addLog(state, `${pet.name} 的出售效果强化了商店宠物。`);
   }
   addLog(state, `出售 ${pet.name}，获得 ${gold} 金。`);
   return success(`已出售 ${pet.name}，获得 ${gold} 金。`);
@@ -1318,6 +1320,9 @@ function runEndTurnAbilities(state: RunState): void {
         .reverse()
         .slice(0, 3);
       for (const target of targets) addPermanentStats(target, pet.level, 0);
+      if (targets.length > 0) {
+        addLog(state, `${pet.name} 强化了前方 ${targets.length} 名友军。`);
+      }
     }
     if (pet.name === "Bison" && !bisonTriggered) {
       const hasLevelThreeFriend = state.team.some(
@@ -1326,6 +1331,7 @@ function runEndTurnAbilities(state: RunState): void {
       if (hasLevelThreeFriend) {
         addPermanentStats(pet, 2 * pet.level, 2 * pet.level);
         bisonTriggered = true;
+        addLog(state, `${pet.name} 因满级友军获得属性。`);
       }
     }
     if (pet.name === "Monkey" && state.team[0]) {
@@ -1334,6 +1340,7 @@ function runEndTurnAbilities(state: RunState): void {
         2 * pet.level,
         2 * pet.level
       );
+      addLog(state, `${pet.name} 强化了最前方友军。`);
     }
     if (pet.name === "Parrot" && index > 0) {
       const ahead = state.team[index - 1];
@@ -1342,6 +1349,7 @@ function runEndTurnAbilities(state: RunState): void {
         level: pet.level,
         expiresOnTurn: state.turn + 1
       };
+      addLog(state, `${pet.name} 复制了前方友军的技能。`);
     }
     if (pet.perks.some((perk) => perk.id === "cake")) {
       pet.triggerCounters.cakeSellBonus =
@@ -1365,9 +1373,13 @@ function runStartTurnAbilities(
     switch (pet.name) {
       case "Swan":
         state.gold += pet.level;
+        addLog(state, `${pet.name} 在回合开始获得 ${pet.level} 金。`);
         break;
       case "Worm": {
-        stockWormFood(state, content, pet);
+        const apple = stockWormFood(state, content, pet);
+        if (apple) {
+          addLog(state, `${pet.name} 在商店右侧上架了 2 金苹果。`);
+        }
         break;
       }
       case "Giraffe": {
@@ -1376,6 +1388,12 @@ function runStartTurnAbilities(
           .reverse();
         for (const target of targets.slice(0, pet.level)) {
           addPermanentStats(target, 1, 1);
+        }
+        if (targets.length > 0) {
+          addLog(
+            state,
+            `${pet.name} 强化了前方 ${Math.min(targets.length, pet.level)} 名友军。`
+          );
         }
         break;
       }
@@ -1393,12 +1411,16 @@ function runStartTurnAbilities(
           addPermanentStats(target, pet.level, pet.level);
         }
         state.shopRngState = rng.state;
+        if (targets.length > 0) {
+          addLog(state, `${pet.name} 强化了 ${targets.length} 名友军。`);
+        }
         break;
       }
       case "Squirrel":
         for (const food of state.shop.foods) {
           if (food) food.cost = Math.max(0, food.cost - pet.level);
         }
+        addLog(state, `${pet.name} 将所有商店食物降价 ${pet.level} 金。`);
         break;
       default:
         break;
@@ -1626,6 +1648,12 @@ export function endTurn(
     })),
     events: structuredClone(result.events)
   };
+  addLog(
+    state,
+    state.lastBattleReplay.opponentKind === "snapshot"
+      ? `对手来源：玩家幽灵 ${state.lastBattleReplay.opponentId ?? ""}`.trim()
+      : "对手来源：系统生成 Ghost。"
+  );
   for (const event of result.events) {
     addLog(state, `[战斗] ${event.message}`);
   }

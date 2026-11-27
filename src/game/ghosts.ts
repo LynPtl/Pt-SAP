@@ -27,7 +27,8 @@ interface GhostFile {
 export const GHOST_LIMIT = 1000;
 export const GHOST_BUCKET_LIMIT = 64;
 const ghostQueues = new Map<string, Promise<void>>();
-export const GHOST_CONTENT_VERSION = "turtle-pack-2026-11-27";
+export const GHOST_CONTENT_VERSION =
+  "turtle-pack-2026-11-27-0a0e4423";
 
 export async function withGhostLock<T>(
   filePath: string,
