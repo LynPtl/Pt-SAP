@@ -22,8 +22,8 @@
 
 - 路径：`d:/pt-sap`
 - 分支：`main`
-- 当前提交：`b7d08f2 Add pt-sap wiki scraper and Turtle Pack coverage`
 - 工作区：干净
+- 最近提交：`git log -1`（交接文档加入前为 `b7d08f2`）
 - 环境：Windows，Node `v24.20.0`，npm `11.19.0`
 - 运行时依赖：`zod`
 - 开发依赖：`typescript`、`tsx`、`@types/node`
