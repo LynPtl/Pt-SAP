@@ -37,8 +37,8 @@
 | 3 金基础价格 | 已对齐 | A | `content.ts` | 特殊价格需逐项维护 |
 | 刷新 1 金、冻结免费 | 已对齐 | A | `run.ts` | 冻结排序细节待验证 |
 | 出售价值等于等级 | 已对齐 | A/B | `sellValueForPet` | 特殊修正需逐项测试 |
-| 2/3 XP 升级 | 已对齐主路径 | A | `gainExperience` | 多级跳跃和奖励占位待 Oracle |
-| 升级二选一 | 已对齐主路径 | A/B | `rewardPets` | 多组奖励和满槽布局为近似 |
+| 2/3 XP 升级 | 已补巧克力 Lv.2→3 奖励边界 | A/B | `gainExperience` | 多级跳跃仍待 Oracle |
+| 升级二选一 | 已补来源记录与 UI 归属 | A/B | `levelUps` / `rewardPets` | 满槽和复杂生成物占位待 Oracle |
 | 单 Perk | 已对齐 | A | `pet.perks` | 复杂覆盖/合并边界待补 |
 | 攻击者攻击力优先触发 | 已对齐 | B | `orderByOwnerAttack` | — |
 | 同攻击种子平局 | 已对齐战斗部分 | B/C | 独立 `trigger-order` 流 | 商店触发也需更多 fixture |

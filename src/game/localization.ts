@@ -473,7 +473,22 @@ function localizeBattleBody(line: string): string {
   };
   if (fixed[body]) return fixed[body];
 
-  let match = body.match(/^(.+) attacks (.+) for (\d+)\.$/);
+  let match = body.match(
+    /^(.+) levels up to (\d) and receives a tier (\d) level-up reward choice\.$/
+  );
+  if (match) {
+    return `${match[1]} 升至 Lv.${match[2]}，获得 ${match[3]} 阶升级候选（二选一）。`;
+  }
+  match = body.match(
+    /^(.+) reaches level 3 by merging two level-2 pets; no level-up reward is offered\.$/
+  );
+  if (match) {
+    return `${match[1]} 由两只 2 级宠物合并升至 Lv.3，本次不提供升级候选。`;
+  }
+  match = body.match(/^(.+) levels up to (\d)\.$/);
+  if (match) return `${match[1]} 升至 Lv.${match[2]}。`;
+
+  match = body.match(/^(.+) attacks (.+) for (\d+)\.$/);
   if (match) return `${match[1]} 攻击 ${match[2]}，造成 ${match[3]} 点伤害。`;
   match = body.match(
     /^(.+) takes (\d+) (attack|ability) damage and is at (\d+) health\.$/

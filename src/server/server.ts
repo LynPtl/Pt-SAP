@@ -167,7 +167,7 @@ export async function createWebServer(
             }
             return {
               ok: result.ok,
-              message: result.message,
+              message: battleLogLineZh(result.message),
               addedLog: state.log
                 .slice(beforeLog)
                 .map(battleLogLineZh),

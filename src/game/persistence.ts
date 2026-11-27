@@ -75,6 +75,7 @@ function migrateRunState(
   state.shop.rewardPets.forEach((offer) => {
     offer.rewardGroup ??= null;
   });
+  state.levelUps ??= [];
   state.lastBattleReplay ??= null;
   if (
     state.lastBattleReplay?.events.some(

@@ -2,6 +2,8 @@ export type PetLevel = 1 | 2 | 3;
 export type BattleSide = "player" | "enemy";
 export type RunPhase = "shop" | "battle" | "gameOver";
 export type BattleOutcome = "win" | "loss" | "draw";
+export type LevelUpCause = "merge" | "experience";
+export type LevelUpSuppressedReason = "level-3-merge";
 
 export type PerkId =
   | "honey"
@@ -73,6 +75,20 @@ export interface ShopPetItem {
   reward: boolean;
 }
 
+export interface LevelUpRecord {
+  petUid: string;
+  petName: string;
+  fromLevel: PetLevel;
+  toLevel: PetLevel;
+  xpGained: number;
+  attackGained: number;
+  healthGained: number;
+  cause: LevelUpCause;
+  rewardGroup: string | null;
+  rewardTier: 1 | 2 | 3 | 4 | 5 | 6 | null;
+  rewardSuppressed: LevelUpSuppressedReason | null;
+}
+
 export interface ShopFoodItem {
   kind: "food";
   itemId: string;
@@ -111,6 +127,7 @@ export interface RunState {
   };
   lastBattleOutcome: BattleOutcome | null;
   lastBattleReplay: BattleReplayData | null;
+  levelUps: LevelUpRecord[];
   nextUid: number;
   log: string[];
 }

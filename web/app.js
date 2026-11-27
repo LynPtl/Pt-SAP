@@ -5,6 +5,7 @@ const refs = {
   levelUpDetail: document.querySelector("#level-up-detail"),
   teamGrid: document.querySelector("#team-grid"),
   selectionHint: document.querySelector("#selection-hint"),
+  levelUpSummary: document.querySelector("#level-up-summary"),
   petShop: document.querySelector("#pet-shop"),
   shopCapacity: document.querySelector("#shop-capacity"),
   foodShop: document.querySelector("#food-shop"),
@@ -195,8 +196,8 @@ async function loadGame() {
 
 async function performAction(action, successMessage) {
   if (requestInFlight) return;
-  const levelsBefore = new Map(
-    (game?.state.team ?? []).map((pet) => [pet.uid, pet.level])
+  const petsBefore = new Map(
+    (game?.state.team ?? []).map((pet) => [pet.uid, pet])
   );
   setBusy(true);
   try {
@@ -216,9 +217,9 @@ async function performAction(action, successMessage) {
     pendingMergeSource = null;
     render();
     const leveledPets = game.state.team.filter(
-      (pet) => pet.level > (levelsBefore.get(pet.uid) ?? pet.level)
+      (pet) => pet.level > (petsBefore.get(pet.uid)?.level ?? pet.level)
     );
-    if (leveledPets.length) showLevelUpFeedback(leveledPets);
+    if (leveledPets.length) showLevelUpFeedback(leveledPets, petsBefore);
     if (data.addedLog?.length) lastBattleLog = data.addedLog;
     showNotice(successMessage ?? data.message ?? "操作成功。", "ok");
     return data;
@@ -230,12 +231,32 @@ async function performAction(action, successMessage) {
   }
 }
 
-function showLevelUpFeedback(leveledPets) {
+function signed(value) {
+  return value >= 0 ? `+${value}` : String(value);
+}
+
+function showLevelUpFeedback(leveledPets, petsBefore) {
   clearTimeout(levelUpTimer);
   refs.levelUpDetail.textContent = leveledPets
     .map(
-      (pet) =>
-        `${pet.nameZh} 升至 Lv.${pet.level}，技能已强化`
+      (pet) => {
+        const before = petsBefore.get(pet.uid);
+        const record = (game.state.levelUps ?? []).find(
+          (entry) =>
+            entry.petUid === pet.uid &&
+            entry.fromLevel === before?.level &&
+            entry.toLevel === pet.level
+        );
+        const stats = record
+          ? `攻 ${signed(record.attackGained)} / 命 ${signed(record.healthGained)}`
+          : "技能已强化";
+        const reward = record?.rewardTier
+          ? ` · ${record.rewardTier} 阶升级候选`
+          : record?.rewardSuppressed
+            ? " · 满级合并不提供候选"
+            : "";
+        return `${pet.nameZh} Lv.${before?.level ?? "?"} → Lv.${pet.level} · ${stats}${reward}`;
+      }
     )
     .join("；");
   refs.levelUpToast.classList.remove("hidden");
@@ -315,6 +336,8 @@ function renderTeam() {
     refs.teamGrid.append(renderPetCard(pet));
   }
 
+  renderLevelUpSummary();
+
   if (pendingPurchase) {
     refs.selectionHint.textContent = "请选择一只同名队伍宠物作为合并目标。";
   } else if (pendingMergeSource) {
@@ -329,6 +352,32 @@ function renderTeam() {
     refs.selectionHint.textContent =
       "单体食物和队伍内合并需要先点击宠物选择目标。";
   }
+}
+
+function renderLevelUpSummary() {
+  refs.levelUpSummary.replaceChildren();
+  const records = game.state.levelUps ?? [];
+  refs.levelUpSummary.classList.toggle("hidden", records.length === 0);
+  if (records.length === 0) return;
+
+  refs.levelUpSummary.append(el("strong", "level-up-summary-title", "本回合升级"));
+  const list = el("div", "level-up-summary-list");
+  for (const record of records) {
+    const reward = record.rewardTier
+      ? `${record.rewardTier} 阶升级候选，二选一`
+      : record.rewardSuppressed
+        ? "两只 2 级合并满级，本次不提供候选"
+        : "本次没有升级候选";
+    list.append(
+      el(
+        "div",
+        "level-up-summary-item",
+        `${record.nameZh} Lv.${record.fromLevel} → Lv.${record.toLevel} · ` +
+          `攻 ${signed(record.attackGained)} / 命 ${signed(record.healthGained)} · ${reward}`
+      )
+    );
+  }
+  refs.levelUpSummary.append(list);
 }
 
 function renderPetCard(pet) {
@@ -374,8 +423,8 @@ function renderPetCard(pet) {
     el(
       "span",
       "pill",
-      pet.nextLevelXp
-        ? `Lv.${pet.level} · XP ${pet.xp}/${pet.nextLevelXp}`
+      pet.levelXpRequired
+        ? `Lv.${pet.level} · 本级 ${pet.levelXp}/${pet.levelXpRequired}`
         : "Lv.3 · 已满级"
     )
   );
@@ -386,6 +435,9 @@ function renderPetCard(pet) {
     meta.append(el("span", "pill copy", `复制：${pet.copiedAbilityName}`));
   }
   card.append(meta);
+  if (pet.levelXpRequired) {
+    card.append(renderXpProgress(pet));
+  }
 
   const statLine = el("div", "stat-line");
   statLine.append(
@@ -435,6 +487,28 @@ function renderPetCard(pet) {
   );
   card.append(actions);
   return card;
+}
+
+function renderXpProgress(pet) {
+  const wrap = el("div", "xp-progress");
+  const required = pet.levelXpRequired;
+  const remaining = Math.max(0, required - pet.levelXp);
+  const label = el("div", "xp-progress-label");
+  label.append(
+    el("span", "", `升级进度 ${pet.levelXp}/${required}`),
+    el("span", "", `还需 ${remaining} XP`)
+  );
+  const track = el("div", "xp-track");
+  track.setAttribute("role", "progressbar");
+  track.setAttribute("aria-label", `${pet.nameZh} 升级进度`);
+  track.setAttribute("aria-valuemin", "0");
+  track.setAttribute("aria-valuemax", String(required));
+  track.setAttribute("aria-valuenow", String(pet.levelXp));
+  const fill = el("span", "xp-fill");
+  fill.style.width = `${Math.min(100, (pet.levelXp / required) * 100)}%`;
+  track.append(fill);
+  wrap.append(label, track);
+  return wrap;
 }
 
 function handleTeamClick(pet) {
@@ -685,6 +759,15 @@ function renderRewards() {
   refs.rewardSection.classList.toggle("hidden", game.state.rewards.length === 0);
   for (const group of game.state.rewards) {
     const wrapper = el("div", "reward-group");
+    const groupHeader = el("div", "reward-group-header");
+    const source = group.source
+      ? `${group.source.nameZh} Lv.${group.source.fromLevel} → Lv.${group.source.toLevel}`
+      : "升级候选";
+    groupHeader.append(
+      el("strong", "", source),
+      el("span", "", `${group.rewardTier} 阶 · 二选一`)
+    );
+    wrapper.append(groupHeader);
     const pair = el("div", "reward-pair");
     for (const offer of group.offers) {
       const card = el("article", "shop-card");

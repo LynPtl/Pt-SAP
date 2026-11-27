@@ -4,6 +4,8 @@ import type {
   BattleOutcome,
   ContentBundle,
   FoodTemplate,
+  LevelUpCause,
+  LevelUpRecord,
   PerkId,
   PerkState,
   PetInstance,
@@ -268,12 +270,20 @@ export function refreshShop(
   return success(chargeGold ? "已刷新，消耗 1 金。" : "商店已刷新。");
 }
 
-function addRewardPets(state: RunState, content: ContentBundle): void {
+interface RewardGroupInfo {
+  groupId: string;
+  tier: 1 | 2 | 3 | 4 | 5 | 6;
+}
+
+function addRewardPets(
+  state: RunState,
+  content: ContentBundle
+): RewardGroupInfo | null {
   const nextTier = Math.min(6, state.shopTier + 1) as 1 | 2 | 3 | 4 | 5 | 6;
   const pool = [...content.pets.values()].filter(
     (template) => template.tier === nextTier
   );
-  if (pool.length === 0) return;
+  if (pool.length === 0) return null;
   const rng = new SeededRandom(
     deriveSeed(state.seed, "level-reward", state.turn, state.nextUid)
   );
@@ -284,6 +294,51 @@ function addRewardPets(state: RunState, content: ContentBundle): void {
       makeShopPet(state, content, template.id, 3, true, false, rewardGroup)
     );
   }
+  return { groupId: rewardGroup, tier: nextTier };
+}
+
+function completeLevelUp(
+  state: RunState,
+  content: ContentBundle,
+  pet: PetInstance,
+  fromLevel: PetLevel,
+  xpBefore: number,
+  attackBefore: number,
+  healthBefore: number,
+  cause: LevelUpCause,
+  allowReward: boolean,
+  suppressedReason: LevelUpRecord["rewardSuppressed"] = null
+): void {
+  const reward = allowReward ? addRewardPets(state, content) : null;
+  const record: LevelUpRecord = {
+    petUid: pet.uid,
+    petName: pet.name,
+    fromLevel,
+    toLevel: pet.level,
+    xpGained: pet.xp - xpBefore,
+    attackGained: pet.attack - attackBefore,
+    healthGained: pet.health - healthBefore,
+    cause,
+    rewardGroup: reward?.groupId ?? null,
+    rewardTier: reward?.tier ?? null,
+    rewardSuppressed: suppressedReason
+  };
+  state.levelUps.push(record);
+
+  if (reward) {
+    addLog(
+      state,
+      `${pet.name} levels up to ${pet.level} and receives a tier ${reward.tier} level-up reward choice.`
+    );
+  } else if (suppressedReason === "level-3-merge") {
+    addLog(
+      state,
+      `${pet.name} reaches level 3 by merging two level-2 pets; no level-up reward is offered.`
+    );
+  } else {
+    addLog(state, `${pet.name} levels up to ${pet.level}.`);
+  }
+  triggerLevelUpAbilities(state, content, pet);
 }
 
 function gainExperience(
@@ -295,18 +350,25 @@ function gainExperience(
 ): boolean {
   if (amount <= 0) return false;
   const previousLevel = pet.level;
+  const xpBefore = pet.xp;
+  const attackBefore = pet.attack;
+  const healthBefore = pet.health;
   pet.xp += amount;
   pet.attack = capStat(pet.attack + amount);
   pet.health = capStat(pet.health + amount);
   pet.level = xpToLevel(pet.xp);
   if (pet.level > previousLevel) {
-    if (
-      grantLevelReward &&
-      !(previousLevel === 2 && pet.level === 3)
-    ) {
-      addRewardPets(state, content);
-    }
-    triggerLevelUpAbilities(state, content, pet);
+    completeLevelUp(
+      state,
+      content,
+      pet,
+      previousLevel,
+      xpBefore,
+      attackBefore,
+      healthBefore,
+      "experience",
+      grantLevelReward
+    );
     return true;
   }
   return false;
@@ -512,6 +574,9 @@ export function buyPet(
       offer.healthBonus
     );
     const oldLevel = mergeTarget.level;
+    const xpBefore = mergeTarget.xp;
+    const attackBefore = mergeTarget.attack;
+    const healthBefore = mergeTarget.health;
     mergeTarget.attack = capStat(
       Math.max(mergeTarget.attack, incoming.attack) +
         1 +
@@ -533,10 +598,19 @@ export function buyPet(
       incoming.battleStats.health
     );
     if (mergeTarget.level > oldLevel) {
-      if (!(oldLevel === 2 && mergeTarget.level === 3)) {
-        addRewardPets(state, content);
-      }
-      triggerLevelUpAbilities(state, content, mergeTarget);
+      const isMaxLevelMerge = oldLevel === 2 && mergeTarget.level === 3;
+      completeLevelUp(
+        state,
+        content,
+        mergeTarget,
+        oldLevel,
+        xpBefore,
+        attackBefore,
+        healthBefore,
+        "merge",
+        !isMaxLevelMerge,
+        isMaxLevelMerge ? "level-3-merge" : null
+      );
     }
     triggerBuyAbilities(state, content, mergeTarget);
     addLog(
@@ -632,6 +706,9 @@ export function mergeTeamPets(
   }
 
   const oldLevel = target.level;
+  const xpBefore = target.xp;
+  const attackBefore = target.attack;
+  const healthBefore = target.health;
   target.attack = capStat(
     Math.max(target.attack, source.attack) +
       1 +
@@ -658,10 +735,19 @@ export function mergeTeamPets(
   state.team.splice(sourceIndex, 1);
 
   if (target.level > oldLevel) {
-    if (!(oldLevel === 2 && target.level === 3)) {
-      addRewardPets(state, content);
-    }
-    triggerLevelUpAbilities(state, content, target);
+    const isMaxLevelMerge = oldLevel === 2 && target.level === 3;
+    completeLevelUp(
+      state,
+      content,
+      target,
+      oldLevel,
+      xpBefore,
+      attackBefore,
+      healthBefore,
+      "merge",
+      !isMaxLevelMerge,
+      isMaxLevelMerge ? "level-3-merge" : null
+    );
   }
   addLog(state, `${target.name} 在队伍内合并，等级 ${target.level}。`);
   return success(`${target.name} 已合并，等级 ${target.level}。`);
@@ -1231,6 +1317,7 @@ function startNextTurn(state: RunState, content: ContentBundle): void {
   state.gold = STARTING_GOLD;
   state.shopTier = shopTierForTurn(state.turn);
   state.shop.rewardPets = [];
+  state.levelUps = [];
   if (state.turn === 3 && state.lives < STARTING_LIVES) {
     state.lives = Math.min(STARTING_LIVES, state.lives + 1);
     addLog(state, "第 3 回合补偿：恢复 1 点生命。");
@@ -1458,6 +1545,7 @@ export function createRun(seed: string, content: ContentBundle): RunState {
     shopPetBuff: { attack: 0, health: 0 },
     lastBattleOutcome: null,
     lastBattleReplay: null,
+    levelUps: [],
     nextUid: 0,
     log: []
   };

@@ -60,14 +60,20 @@ test("web server serves UI and supports a session action", async (t) => {
   assert.equal(action.status, 200);
   const actionData = (await action.json()) as {
     ok: boolean;
+    message: string;
     view: {
       state: {
         teamSize: number;
-        team: Array<{ nameZh: string; ability: string }>;
+        team: Array<{ name: string; nameZh: string; ability: string }>;
       };
     };
   };
   assert.equal(actionData.ok, true);
+  assert.match(actionData.message, /已购买/);
+  assert.equal(
+    actionData.message.includes(actionData.view.state.team[0].name),
+    false
+  );
   assert.equal(actionData.view.state.teamSize, 1);
   assert.ok(actionData.view.state.team[0].nameZh);
   assert.match(actionData.view.state.team[0].ability, /[\u4e00-\u9fff]/);

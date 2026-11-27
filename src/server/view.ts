@@ -70,6 +70,7 @@ export interface WebView {
     pets: ShopPetView[];
     foods: ShopFoodView[];
     rewards: RewardGroupView[];
+    levelUps: LevelUpView[];
     recentLog: string[];
     lastBattleOutcome: RunState["lastBattleOutcome"];
     lastBattleReplay: BattleReplayView | null;
@@ -124,6 +125,8 @@ export interface PetView {
   level: PetLevel;
   xp: number;
   nextLevelXp: number | null;
+  levelXp: number;
+  levelXpRequired: number | null;
   attack: number;
   health: number;
   battleAttackBonus: number;
@@ -163,8 +166,31 @@ export interface ShopFoodView {
   targetMode: FoodTargetMode;
 }
 
+export interface LevelUpView {
+  petUid: string;
+  petName: string;
+  nameZh: string;
+  fromLevel: PetLevel;
+  toLevel: PetLevel;
+  xpGained: number;
+  attackGained: number;
+  healthGained: number;
+  cause: RunState["levelUps"][number]["cause"];
+  rewardGroup: string | null;
+  rewardTier: number | null;
+  rewardSuppressed: RunState["levelUps"][number]["rewardSuppressed"];
+}
+
 export interface RewardGroupView {
   groupId: string;
+  rewardTier: number;
+  source: {
+    petUid: string;
+    nameZh: string;
+    fromLevel: PetLevel;
+    toLevel: PetLevel;
+    cause: RunState["levelUps"][number]["cause"];
+  } | null;
   offers: Array<{
     rewardIndex: number;
     templateId: string;
@@ -216,6 +242,8 @@ function petView(
     level: pet.level,
     xp: pet.xp,
     nextLevelXp: xpThresholdForNextLevel(pet.level),
+    levelXp: pet.level === 1 ? pet.xp : pet.level === 2 ? pet.xp - 2 : 0,
+    levelXpRequired: pet.level === 1 ? 2 : pet.level === 2 ? 3 : null,
     attack: pet.attack,
     health: pet.health,
     battleAttackBonus: pet.battleStats.attack,
@@ -403,16 +431,50 @@ function foodView(
   };
 }
 
+function levelUpsView(state: RunState): LevelUpView[] {
+  return (state.levelUps ?? []).map((record) => ({
+    petUid: record.petUid,
+    petName: record.petName,
+    nameZh: petNameZh(record.petName),
+    fromLevel: record.fromLevel,
+    toLevel: record.toLevel,
+    xpGained: record.xpGained,
+    attackGained: record.attackGained,
+    healthGained: record.healthGained,
+    cause: record.cause,
+    rewardGroup: record.rewardGroup,
+    rewardTier: record.rewardTier,
+    rewardSuppressed: record.rewardSuppressed
+  }));
+}
+
 function rewardGroupsView(
   state: RunState,
   content: ContentBundle
 ): RewardGroupView[] {
   const groups = new Map<string, RewardGroupView>();
+  const levelUps = state.levelUps ?? [];
   state.shop.rewardPets.forEach((offer, rewardIndex) => {
     const template = content.pets.get(offer.templateId);
     if (!template) return;
     const groupId = offer.rewardGroup ?? `single-${rewardIndex}`;
-    const group = groups.get(groupId) ?? { groupId, offers: [] };
+    const sourceRecord = offer.rewardGroup
+      ? levelUps.find((record) => record.rewardGroup === offer.rewardGroup)
+      : null;
+    const group = groups.get(groupId) ?? {
+      groupId,
+      rewardTier: template.tier,
+      source: sourceRecord
+        ? {
+            petUid: sourceRecord.petUid,
+            nameZh: petNameZh(sourceRecord.petName),
+            fromLevel: sourceRecord.fromLevel,
+            toLevel: sourceRecord.toLevel,
+            cause: sourceRecord.cause
+          }
+        : null,
+      offers: []
+    };
     group.offers.push({
       rewardIndex,
       templateId: template.id,
@@ -466,6 +528,7 @@ export function buildWebView(
         offer ? [foodView(content, offer, slot)] : []
       ),
       rewards: rewardGroupsView(state, content),
+      levelUps: levelUpsView(state),
       recentLog: state.log.slice(-120).map(battleLogLineZh),
       lastBattleOutcome: state.lastBattleOutcome,
       lastBattleReplay: battleReplayView(state, content)

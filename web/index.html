@@ -55,6 +55,12 @@
           </div>
           <div id="team-grid" class="team-grid"></div>
           <div id="selection-hint" class="selection-hint"></div>
+          <div
+            id="level-up-summary"
+            class="level-up-summary hidden"
+            role="status"
+            aria-live="polite"
+          ></div>
         </section>
 
         <section class="panel shop-panel" aria-labelledby="shop-title">
@@ -66,6 +72,14 @@
             <button id="roll-button" class="button secondary" type="button">
               刷新 · 1 金
             </button>
+          </div>
+
+          <div id="reward-section" class="shop-section hidden">
+            <div class="section-title">
+              <h3>升级候选</h3>
+              <span>不占普通槽位 · 每组只能选择一个</span>
+            </div>
+            <div id="reward-shop" class="reward-groups"></div>
           </div>
 
           <div class="shop-section">
@@ -82,14 +96,6 @@
               <span>单击购买；单体食物先选中队伍目标</span>
             </div>
             <div id="food-shop" class="shop-grid foods"></div>
-          </div>
-
-          <div id="reward-section" class="shop-section hidden">
-            <div class="section-title">
-              <h3>升级奖励</h3>
-              <span>每组只能选择一个</span>
-            </div>
-            <div id="reward-shop" class="reward-groups"></div>
           </div>
 
           <div class="turn-actions">

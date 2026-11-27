@@ -292,6 +292,9 @@ test("a level-up reward pair allows only one purchase", () => {
       (offer) => content.pets.get(offer.templateId)?.tier === 2
     )
   );
+  assert.equal(state.levelUps.length, 1);
+  assert.equal(state.levelUps[0].rewardTier, 2);
+  assert.equal(state.levelUps[0].rewardGroup, group);
   const result = buyPet(state, content, null, undefined, 0);
   assert.equal(result.ok, true);
   assert.equal(
@@ -317,6 +320,45 @@ test("separate level-ups create separate linked reward groups", () => {
     new Set(state.shop.rewardPets.map((offer) => offer.rewardGroup)).size,
     2
   );
+});
+
+test("Chocolate can take a level 2 pet to level 3 and still grants a reward pair", () => {
+  const state = createRun("chocolate-level-3", content);
+  const ant = pet("Ant", "chocolate-level-ant", 2);
+  ant.xp = 4;
+  state.team = [ant];
+  state.shop.foods[0] = foodOffer("chocolate");
+
+  assert.equal(buyFood(state, content, 0, ant.uid).ok, true);
+  assert.equal(ant.level, 3);
+  assert.equal(state.shop.rewardPets.length, 2);
+  assert.equal(state.levelUps.length, 1);
+  assert.equal(state.levelUps[0].fromLevel, 2);
+  assert.equal(state.levelUps[0].toLevel, 3);
+  assert.equal(state.levelUps[0].cause, "experience");
+  assert.equal(state.levelUps[0].rewardSuppressed, null);
+  assert.equal(
+    state.levelUps[0].rewardGroup,
+    state.shop.rewardPets[0].rewardGroup
+  );
+});
+
+test("merging two level 2 pets to level 3 suppresses the reward pair", () => {
+  const state = createRun("max-level-merge", content);
+  state.team = [
+    pet("Ant", "max-level-target", 2),
+    pet("Ant", "max-level-source", 2)
+  ];
+
+  assert.equal(
+    mergeTeamPets(state, content, "max-level-source", "max-level-target").ok,
+    true
+  );
+  assert.equal(state.team[0].level, 3);
+  assert.equal(state.shop.rewardPets.length, 0);
+  assert.equal(state.levelUps.length, 1);
+  assert.equal(state.levelUps[0].cause, "merge");
+  assert.equal(state.levelUps[0].rewardSuppressed, "level-3-merge");
 });
 
 test("a complete turn produces a battle result and advances or ends the run", () => {
